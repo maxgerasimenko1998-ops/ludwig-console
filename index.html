@@ -136,6 +136,11 @@
         <option value="toggle">🔁 Нажал-вкл / нажал-выкл (сам выключится через 15 сек)</option>
         <option value="open">📢 РУКИ СВОБОДНЫ — микрофон всегда открыт (как у поляков)</option>
       </select>
+      <label style="margin-top:10px">Какой микрофон слушать</label>
+      <select id="micDevice">
+        <option value="">по умолчанию (что выберет телефон)</option>
+      </select>
+      <p class="hint">Если воткнута петличка (Lark, DJI) — выбери её здесь. Телефон сам не всегда берёт внешний микрофон, и тогда робот слышит встроенный: тихо и с эхом из колонки.</p>
       <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
       <p class="hint">Мгновенно глушит звук <b>и обрывает генерацию</b> — токены больше не тратятся. Сам переподключается за пару секунд, контекст дня и все твои подсказки возвращаются автоматически. Теряется только текущая перепалка с гостем.</p>
       <p class="hint">«Всегда открыт» = робот сам ходит и болтает, оператор нужен один. Расплата: реагирует на посторонних и хуже слышит тихих. Себя он не слышит НИКОГДА, в любом режиме.</p>
@@ -339,6 +344,34 @@ function setWanted(v){
   }
 }
 
+// ---- выбор микрофона ----
+// iOS сам решает, какой вход слушать, и внешнюю петличку берёт не всегда.
+// Названия устройств браузер показывает ТОЛЬКО после выданного разрешения,
+// поэтому список наполняем уже после подключения.
+const micDeviceId = () => $('micDevice').value || undefined;
+async function refreshMicList(){
+  if(!navigator.mediaDevices?.enumerateDevices) return;
+  let list=[];
+  try{ list=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput'); }catch{ return; }
+  const sel=$('micDevice'), keep=localStorage.getItem('micDeviceId')||'';
+  sel.innerHTML='<option value="">по умолчанию (что выберет телефон)</option>';
+  list.forEach((d,i)=>{
+    const o=document.createElement('option');
+    o.value=d.deviceId; o.textContent=d.label||`микрофон ${i+1}`;
+    sel.appendChild(o);
+  });
+  if(keep && list.some(d=>d.deviceId===keep)) sel.value=keep;
+  log(`🎙 Микрофонов найдено: ${list.length}`);
+}
+$('micDevice').onchange=async()=>{
+  store('micDeviceId',$('micDevice').value);
+  const name=$('micDevice').selectedOptions[0]?.textContent||'по умолчанию';
+  if(!conv){ log('🎙 Микрофон выбран: '+name); return; }
+  try{ await conv.changeInputDevice({inputDeviceId:micDeviceId()}); log('🎙 Микрофон переключён: '+name); }
+  catch(e){ log('⚠️ Не вышло переключить микрофон: '+(e?.message||e)); }
+};
+navigator.mediaDevices?.addEventListener?.('devicechange', refreshMicList);
+
 // ---- режим микрофона ----
 const micMode = () => $('micMode').value;
 $('micMode').value = localStorage.getItem('micMode') || 'hold';   // запоминаем выбор
@@ -406,6 +439,7 @@ async function doConnect(isReconnect){
   try{
     conv=await Conversation.startSession({
       agentId: sessionCfg.agentId,
+      inputDeviceId: micDeviceId(),   // пусто = как решит телефон
       connectionType:'webrtc',
       overrides: sessionCfg.overrides,
       onStatusChange:({status})=>{
@@ -434,6 +468,7 @@ async function doConnect(isReconnect){
       onError:e=>log('⚠️ '+(e?.message||e)),
     });
     setWanted(micMode()==='open'); try{refreshDirButtons();}catch{}
+    refreshMicList();   // названия микрофонов видны только после разрешения
     reconnectTries=0;   // связь восстановилась — счётчик попыток сбрасываем
     $('reconnBanner').textContent='🔄 Связь прервалась — переподключаюсь…';
     $('reconnBanner').classList.add('hidden');
