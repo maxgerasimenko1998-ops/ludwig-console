@@ -394,7 +394,15 @@ $('agentId').value=localStorage.getItem('ludwigAgentId')||'';
 $('dayCtx').value=localStorage.getItem('dayCtx')||'';
 function log(l){ const e=$('log'); e.textContent+=l+'\n'; e.scrollTop=e.scrollHeight; }
 
+// Живая сессия должна быть РОВНО ОДНА. Сервер сам старую не закрывает, и две
+// параллельные = два Людвига говорят одновременно (поймано вживую 29.07: смена
+// аудиотракта при подключении микрофона моргнула связью, пульт переподключился,
+// и старая сессия осталась висеть — 264 и 277 секунд бок о бок).
+let connecting=false;
 async function doConnect(isReconnect){
+  if(connecting){ log('… подключение уже идёт, повтор пропущен'); return; }
+  connecting=true;
+  if(conv){ try{ await conv.endSession(); }catch{} conv=null; }
   try{
     conv=await Conversation.startSession({
       agentId: sessionCfg.agentId,
@@ -455,8 +463,13 @@ async function doConnect(isReconnect){
     if(!userStopping){ scheduleReconnect(); }
     else { alert('Не удалось подключиться: '+msg); showSetup(); }
   }
+  finally{ connecting=false; }
 }
 function handleDisconnect(){
+  // Сессию, которую браузер считает мёртвой, сервер таковой НЕ считает: пока её
+  // не закрыть явно, она живёт и продолжает говорить. Закрываем перед реконнектом.
+  const dead=conv;
+  if(dead){ try{ dead.endSession(); }catch{} }
   conv=null; agentSpeaking=false; boardPlaying=false; hushed=false;
   clearTimeout(boardTimer); clearTimeout(boardWatchdog);
   // без этого экран замирал в цвете момента обрыва — красный «слушаю» держался
