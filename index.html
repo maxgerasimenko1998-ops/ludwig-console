@@ -485,11 +485,34 @@ $('connMode').onchange = ()=>{
     : '🔌 Способ связи: WebRTC — переподключись');
 };
 
+// ---- «пинок» аудиосессии (iOS) ----
+// На iOS Safari сам микрофон не выбирает: он отдаёт маршрут системе, а deviceId
+// внутри превращается в setPreferredInput — подсказку, которую iOS вправе
+// проигнорировать. Известный обход: захватить микрофон в режиме 'auto', и лишь
+// ПОСЛЕ этого переключить сессию в 'play-and-record' — тогда iOS перемаршрутизирует
+// вход на гарнитуру. Порядок принципиален: сделать это ДО захвата — 50/50, что
+// останешься на встроенном микрофоне.
+function audioSessionSet(type, why){
+  try{
+    if(!navigator.audioSession) return false;
+    navigator.audioSession.type = type;
+    if(why) log(`🎚 Аудиосессия: ${type} (${why})`);
+    return true;
+  }catch(e){ return false; }
+}
+async function iosKick(){
+  if(!IS_IOS || !navigator.audioSession) return;
+  await new Promise(r=>setTimeout(r, 350));      // дать захвату устояться
+  audioSessionSet('play-and-record','пинок маршрута');
+}
+
 async function reacquireMic(why){
   if(!conv){ log('🎙 '+why+': связи нет, нечего переустанавливать'); return; }
   try{
+    audioSessionSet('auto');                     // пинок работает только в паре
     await conv.changeInputDevice({inputDeviceId:micDeviceId()});
     log('🎙 Вход переустановлен ('+why+')');
+    await iosKick();
   }catch(e){ log('⚠️ Вход переустановить не вышло: '+(e?.message||e)); }
 }
 // Микрофон, воткнутый ПОСРЕДИ разговора, сам себя не подхватывает: WebRTC держит
@@ -566,6 +589,7 @@ async function doConnect(isReconnect){
   if(connecting){ log('… подключение уже идёт, повтор пропущен'); return; }
   connecting=true;
   if(conv){ try{ await conv.endSession(); }catch{} conv=null; }
+  audioSessionSet('auto');   // захват начинаем в 'auto', пинок будет после
   try{
     conv=await Conversation.startSession({
       agentId: sessionCfg.agentId,
@@ -604,6 +628,7 @@ async function doConnect(isReconnect){
     });
     setWanted(micMode()==='open'); try{refreshDirButtons();}catch{}
     refreshMicList();   // названия микрофонов видны только после разрешения
+    iosKick();          // пинок маршрута — ТОЛЬКО после захвата, иначе 50/50
     levelStart();
     reconnectTries=0;   // связь восстановилась — счётчик попыток сбрасываем
     $('reconnBanner').textContent='🔄 Связь прервалась — переподключаюсь…';
