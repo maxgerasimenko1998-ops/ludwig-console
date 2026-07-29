@@ -148,6 +148,8 @@
         </div>
         <span id="levelTxt" class="hint" style="min-width:96px;text-align:right">микрофон закрыт</span>
       </div>
+      <button id="micRetry" class="ghost" style="margin-top:4px">🔄 Переподключить микрофон</button>
+      <p class="hint">Жми, если полоска стоит на нуле или ты воткнул петличку уже после подключения. Заново захватывает вход, не разрывая разговор.</p>
       <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
       <p class="hint">Мгновенно глушит звук <b>и обрывает генерацию</b> — токены больше не тратятся. Сам переподключается за пару секунд, контекст дня и все твои подсказки возвращаются автоматически. Теряется только текущая перепалка с гостем.</p>
       <p class="hint">«Всегда открыт» = робот сам ходит и болтает, оператор нужен один. Расплата: реагирует на посторонних и хуже слышит тихих. Себя он не слышит НИКОГДА, в любом режиме.</p>
@@ -411,7 +413,22 @@ $('micDevice').onchange=async()=>{
   try{ await conv.changeInputDevice({inputDeviceId:micDeviceId()}); log('🎙 Микрофон переключён: '+name); }
   catch(e){ log('⚠️ Не вышло переключить микрофон: '+(e?.message||e)); }
 };
-navigator.mediaDevices?.addEventListener?.('devicechange', refreshMicList);
+async function reacquireMic(why){
+  if(!conv){ log('🎙 '+why+': связи нет, нечего переустанавливать'); return; }
+  try{
+    await conv.changeInputDevice({inputDeviceId:micDeviceId()});
+    log('🎙 Вход переустановлен ('+why+')');
+  }catch(e){ log('⚠️ Вход переустановить не вышло: '+(e?.message||e)); }
+}
+// Микрофон, воткнутый ПОСРЕДИ разговора, сам себя не подхватывает: WebRTC держит
+// ту дорожку, что захватил при старте. Поймано вживую 29.07 — Макс воткнул
+// петличку, звук в колонке шёл дальше, а слушал по-прежнему встроенный микрофон
+// и реагировал на собственную колонку. Поэтому пересобираем вход принудительно.
+navigator.mediaDevices?.addEventListener?.('devicechange', async()=>{
+  await refreshMicList();
+  reacquireMic('устройства изменились');
+});
+$('micRetry').onclick=()=>reacquireMic('вручную');
 
 // ---- режим микрофона ----
 const micMode = () => $('micMode').value;
