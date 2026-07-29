@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<title>Диагностика микрофона</title>
+<style>
+  :root{ --bg:#14161a; --card:#1e2128; --text:#e8e8e8; --dim:#8a8f98; --green:#2ecc71; --red:#e74c3c; --gold:#c9a227; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,system-ui,sans-serif;
+       padding:14px;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  h1{font-size:19px;color:var(--gold);text-align:center}
+  .card{background:var(--card);border-radius:14px;padding:13px;display:flex;flex-direction:column;gap:8px}
+  button{border:none;border-radius:12px;padding:15px;font-size:17px;font-weight:600;color:#fff;background:#3498db}
+  button.alt{background:#7d5fc4}
+  h2{font-size:15px;color:var(--gold)}
+  .row{display:flex;align-items:center;gap:8px}
+  .bar{flex:1;height:18px;background:#0f1114;border-radius:9px;overflow:hidden}
+  .fill{height:100%;width:0%;background:var(--green);transition:width .06s linear}
+  pre{font-size:12px;white-space:pre-wrap;word-break:break-all;background:#0f1114;border-radius:10px;padding:10px;line-height:1.5}
+  .hint{font-size:12px;color:var(--dim);line-height:1.45}
+  .ok{color:var(--green);font-weight:600}
+  .bad{color:var(--red);font-weight:600}
+</style>
+</head>
+<body>
+  <h1>🔬 Диагностика микрофона</h1>
+
+  <div class="card">
+    <p class="hint">Эта страница ничего не настраивает — она только спрашивает телефон, какие микрофоны он готов отдать браузеру, и в каком режиме. Жми кнопки сверху вниз и пришли скриншот результата.</p>
+  </div>
+
+  <div class="card">
+    <h2>Шаг 1 — обычный режим (как у агента)</h2>
+    <p class="hint">Захват с эхоподавлением. Именно так работает разговор с роботом.</p>
+    <button id="b1">Проверить обычный режим</button>
+  </div>
+
+  <div class="card">
+    <h2>Шаг 2 — режим записи (как в Диктофоне)</h2>
+    <p class="hint">То же самое, но <b>без эхоподавления и шумодава</b>. Диктофон пишет с петлички именно так — проверяем, отдаст ли телефон её браузеру.</p>
+    <button id="b2" class="alt">Проверить режим записи</button>
+  </div>
+
+  <div class="card">
+    <h2>Шаг 3 — кто сейчас в эфире</h2>
+    <p class="hint">Говори в петличку, отойдя от телефона на пару метров. Если полоска дёргается — слышит петличка. Если только когда говоришь в телефон — слышит встроенный.</p>
+    <div class="row"><span>🎙</span><div class="bar"><div class="fill" id="fill"></div></div><span id="pct" class="hint">0%</span></div>
+    <p class="hint" id="who">—</p>
+  </div>
+
+  <div class="card">
+    <h2>Результат</h2>
+    <pre id="out">Нажми «Проверить обычный режим».</pre>
+  </div>
+
+<script type="module">
+const $=id=>document.getElementById(id);
+const out=$('out');
+let lines=[];
+const say=s=>{ lines.push(s); out.textContent=lines.join('\n'); };
+
+let ctx=null, analyser=null, live=null, raf=null;
+
+async function listDevices(tag){
+  const all=await navigator.mediaDevices.enumerateDevices();
+  const ins=all.filter(d=>d.kind==='audioinput');
+  const outs=all.filter(d=>d.kind==='audiooutput');
+  say(`\n[${tag}] ВХОДОВ: ${ins.length}`);
+  ins.forEach((d,i)=>say(`   ${i+1}. «${d.label||'(без названия)'}»`));
+  say(`[${tag}] ВЫХОДОВ: ${outs.length}`);
+  outs.forEach((d,i)=>say(`   ${i+1}. «${d.label||'(без названия)'}»`));
+  return ins;
+}
+
+function meter(stream, label){
+  if(raf) cancelAnimationFrame(raf);
+  if(live) live.getTracks().forEach(t=>t.stop());
+  live=stream;
+  ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+  ctx.resume?.();
+  analyser=ctx.createAnalyser(); analyser.fftSize=1024;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  const buf=new Uint8Array(analyser.fftSize);
+  let peak=0;
+  $('who').innerHTML='В эфире: <b>'+label+'</b>';
+  (function tick(){
+    analyser.getByteTimeDomainData(buf);
+    let m=0; for(const v of buf) m=Math.max(m, Math.abs(v-128)/128);
+    const pct=Math.min(100, Math.round(m*100*2.5));
+    peak=Math.max(peak*0.93, pct);
+    $('fill').style.width=peak+'%';
+    $('pct').textContent=Math.round(peak)+'%';
+    raf=requestAnimationFrame(tick);
+  })();
+}
+
+async function probe(tag, constraints){
+  try{
+    say(`\n═══ ${tag} ═══`);
+    const stream=await navigator.mediaDevices.getUserMedia({audio:constraints});
+    const t=stream.getAudioTracks()[0];
+    const s=t.getSettings?.()||{};
+    say(`Телефон дал микрофон: «${t.label||'(без названия)'}»`);
+    say(`  эхоподавление: ${s.echoCancellation} · шумодав: ${s.noiseSuppression} · автогромкость: ${s.autoGainControl}`);
+    say(`  частота: ${s.sampleRate||'?'} · каналов: ${s.channelCount||'?'}`);
+    await listDevices(tag);
+    meter(stream, t.label||tag);
+  }catch(e){
+    say(`ОШИБКА: ${e.name} — ${e.message}`);
+  }
+}
+
+$('b1').onclick=()=>probe('ОБЫЧНЫЙ РЕЖИМ (как у агента)', true);
+$('b2').onclick=()=>probe('РЕЖИМ ЗАПИСИ (как в Диктофоне)',
+  {echoCancellation:false, noiseSuppression:false, autoGainControl:false});
+
+say(`Браузер: ${navigator.userAgent}`);
+listDevices('ДО РАЗРЕШЕНИЯ').catch(()=>{});
+</script>
+</body>
+</html>
