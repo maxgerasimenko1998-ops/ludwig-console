@@ -141,6 +141,13 @@
         <option value="">по умолчанию (что выберет телефон)</option>
       </select>
       <p class="hint">Если воткнута петличка (Lark, DJI) — выбери её здесь. Телефон сам не всегда берёт внешний микрофон, и тогда робот слышит встроенный: тихо и с эхом из колонки.</p>
+      <div id="levelRow" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <span style="font-size:20px">🎙</span>
+        <div style="flex:1;height:14px;background:#222;border-radius:7px;overflow:hidden">
+          <div id="levelBar" style="height:100%;width:0%;background:#3a8f3a;transition:width .06s linear"></div>
+        </div>
+        <span id="levelTxt" class="hint" style="min-width:96px;text-align:right">микрофон закрыт</span>
+      </div>
       <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
       <p class="hint">Мгновенно глушит звук <b>и обрывает генерацию</b> — токены больше не тратятся. Сам переподключается за пару секунд, контекст дня и все твои подсказки возвращаются автоматически. Теряется только текущая перепалка с гостем.</p>
       <p class="hint">«Всегда открыт» = робот сам ходит и болтает, оператор нужен один. Расплата: реагирует на посторонних и хуже слышит тихих. Себя он не слышит НИКОГДА, в любом режиме.</p>
@@ -344,6 +351,40 @@ function setWanted(v){
   }
 }
 
+// ---- полоска громкости ----
+// Единственный способ увидеть ГЛАЗАМИ, что микрофон живой, до того как робот
+// промолчит в ответ. Уровень берём у самого SDK (getInputVolume): второй раз
+// открывать микрофон на iOS опасно — два захвата дерутся за один вход.
+let levelTimer=null, levelPeak=0, levelSilent=0;
+function levelStart(){
+  clearInterval(levelTimer);
+  levelPeak=0; levelSilent=0;
+  levelTimer=setInterval(()=>{
+    const bar=$('levelBar'), txt=$('levelTxt');
+    if(!conv){ bar.style.width='0%'; txt.textContent='нет связи'; return; }
+    const open = micWanted && !agentSpeaking && !boardPlaying;
+    if(!open){
+      bar.style.width='0%'; bar.style.background='#444';
+      txt.textContent = agentSpeaking||boardPlaying ? 'робот говорит' : 'микрофон закрыт';
+      levelSilent=0; return;
+    }
+    let v=0;
+    try{ v=conv.getInputVolume?.() ?? 0; }catch{}
+    const pct=Math.min(100, Math.round(v*100*3));      // *3 — иначе речь еле видна
+    levelPeak=Math.max(levelPeak*0.94, pct);
+    bar.style.width=levelPeak+'%';
+    bar.style.background = levelPeak>70 ? '#c8a020' : '#3a8f3a';
+    if(pct<2){
+      levelSilent++;
+      // 5 секунд полной тишины при открытом микрофоне = вход мёртвый,
+      // а не «человек молчит»: даже в тихой комнате шум даёт единицы процентов
+      txt.textContent = levelSilent>50 ? '⚠️ вход молчит — не тот микрофон?' : 'тихо';
+    } else { levelSilent=0; txt.textContent = pct>70 ? 'громко' : 'слышу'; }
+  }, 100);
+}
+function levelStop(){ clearInterval(levelTimer); levelTimer=null;
+  const b=$('levelBar'); if(b){ b.style.width='0%'; $('levelTxt').textContent='нет связи'; } }
+
 // ---- выбор микрофона ----
 // iOS сам решает, какой вход слушать, и внешнюю петличку берёт не всегда.
 // Названия устройств браузер показывает ТОЛЬКО после выданного разрешения,
@@ -469,6 +510,7 @@ async function doConnect(isReconnect){
     });
     setWanted(micMode()==='open'); try{refreshDirButtons();}catch{}
     refreshMicList();   // названия микрофонов видны только после разрешения
+    levelStart();
     reconnectTries=0;   // связь восстановилась — счётчик попыток сбрасываем
     $('reconnBanner').textContent='🔄 Связь прервалась — переподключаюсь…';
     $('reconnBanner').classList.add('hidden');
@@ -501,6 +543,7 @@ async function doConnect(isReconnect){
   finally{ connecting=false; }
 }
 function handleDisconnect(){
+  levelStop();
   // Сессию, которую браузер считает мёртвой, сервер таковой НЕ считает: пока её
   // не закрыть явно, она живёт и продолжает говорить. Закрываем перед реконнектом.
   const dead=conv;
