@@ -148,6 +148,12 @@
         </div>
         <span id="levelTxt" class="hint" style="min-width:96px;text-align:right">микрофон закрыт</span>
       </div>
+      <label style="margin-top:10px">Способ связи</label>
+      <select id="connMode">
+        <option value="webrtc">Обычный (WebRTC) — быстрее, но микрофон выбирает айфон</option>
+        <option value="websocket">Для петлички (WebSocket) — можно навязать внешний микрофон</option>
+      </select>
+      <p class="hint">Айфон в режиме разговора упрямо слушает встроенный микрофон. Второй способ обходит это: сам ищет вход со словом «earphone/headphone» в названии — так iOS часто и обзывает петличку. Задержка чуть больше. <b>Меняется только при переподключении.</b></p>
       <button id="micRetry" class="ghost" style="margin-top:4px">🔄 Переподключить микрофон</button>
       <p class="hint">Жми, если полоска стоит на нуле или ты воткнул петличку уже после подключения. Заново захватывает вход, не разрывая разговор.</p>
       <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
@@ -413,6 +419,16 @@ $('micDevice').onchange=async()=>{
   try{ await conv.changeInputDevice({inputDeviceId:micDeviceId()}); log('🎙 Микрофон переключён: '+name); }
   catch(e){ log('⚠️ Не вышло переключить микрофон: '+(e?.message||e)); }
 };
+// ---- способ связи ----
+const connMode = () => $('connMode').value;
+$('connMode').value = localStorage.getItem('connMode') || 'webrtc';
+$('connMode').onchange = ()=>{
+  store('connMode', connMode());
+  log(connMode()==='websocket'
+    ? '🔌 Способ связи: WebSocket (навязываем внешний микрофон) — переподключись'
+    : '🔌 Способ связи: WebRTC — переподключись');
+};
+
 async function reacquireMic(why){
   if(!conv){ log('🎙 '+why+': связи нет, нечего переустанавливать'); return; }
   try{
@@ -498,7 +514,11 @@ async function doConnect(isReconnect){
     conv=await Conversation.startSession({
       agentId: sessionCfg.agentId,
       inputDeviceId: micDeviceId(),   // пусто = как решит телефон
-      connectionType:'webrtc',
+      connectionType: connMode(),
+      // Работает ТОЛЬКО в websocket-режиме: в webrtc SDK на эту опцию ругается.
+      // Ищет вход со словом earphone/headphone/airpod в названии — так iOS
+      // нередко подписывает петличку, воткнутую в порт.
+      preferHeadphonesForIosDevices: connMode()==='websocket' ? true : undefined,
       overrides: sessionCfg.overrides,
       onStatusChange:({status})=>{
         const on=status==='connected';
