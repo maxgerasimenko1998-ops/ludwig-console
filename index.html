@@ -140,7 +140,15 @@
       <select id="micDevice">
         <option value="">по умолчанию (что выберет телефон)</option>
       </select>
-      <p class="hint">Если воткнута петличка (Lark, DJI) — выбери её здесь. Телефон сам не всегда берёт внешний микрофон, и тогда робот слышит встроенный: тихо и с эхом из колонки.</p>
+      <p class="hint" id="micHint">Если воткнута петличка (Lark, DJI) — выбери её здесь.</p>
+
+      <div id="outRow" class="hidden">
+        <label style="margin-top:10px">Куда выводить звук</label>
+        <select id="outDevice">
+          <option value="">по умолчанию (что выберет телефон)</option>
+        </select>
+        <p class="hint">Выбери колонку робота. Работает не везде: на айфоне вывод держит система, там этот список пустой.</p>
+      </div>
       <div id="levelRow" style="display:flex;align-items:center;gap:8px;margin-top:6px">
         <span style="font-size:20px">🎙</span>
         <div style="flex:1;height:14px;background:#222;border-radius:7px;overflow:hidden">
@@ -397,21 +405,69 @@ function levelStop(){ clearInterval(levelTimer); levelTimer=null;
 // iOS сам решает, какой вход слушать, и внешнюю петличку берёт не всегда.
 // Названия устройств браузер показывает ТОЛЬКО после выданного разрешения,
 // поэтому список наполняем уже после подключения.
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+
+// Слова, по которым узнаём внешний микрофон в названии устройства.
+// Список из живого опыта: петлички Lark/DJI, USB-приёмники, гарнитуры.
+const EXTERNAL_MIC = /lark|hollyland|dji|rode|usb|wired|headset|earphone|headphone|external|bluetooth|extern/i;
+const BUILTIN_MIC  = /iphone|built-?in|einge|телефон|phone mic|default/i;
+
 const micDeviceId = () => $('micDevice').value || undefined;
+const outDeviceId = () => $('outDevice')?.value || undefined;
+
 async function refreshMicList(){
   if(!navigator.mediaDevices?.enumerateDevices) return;
-  let list=[];
-  try{ list=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput'); }catch{ return; }
+  let all=[];
+  try{ all=await navigator.mediaDevices.enumerateDevices(); }catch{ return; }
+  const ins=all.filter(d=>d.kind==='audioinput');
+  const outs=all.filter(d=>d.kind==='audiooutput');
+
   const sel=$('micDevice'), keep=localStorage.getItem('micDeviceId')||'';
   sel.innerHTML='<option value="">по умолчанию (что выберет телефон)</option>';
-  list.forEach((d,i)=>{
+  ins.forEach((d,i)=>{
     const o=document.createElement('option');
     o.value=d.deviceId; o.textContent=d.label||`микрофон ${i+1}`;
     sel.appendChild(o);
   });
-  if(keep && list.some(d=>d.deviceId===keep)) sel.value=keep;
-  log(`🎙 Микрофонов найдено: ${list.length}`);
+  if(keep && ins.some(d=>d.deviceId===keep)) sel.value=keep;
+
+  // Вывод звука: на Андроиде список живой, на айфоне система его не отдаёт.
+  const canPickOutput = outs.length>0 && ('setSinkId' in HTMLMediaElement.prototype || IS_ANDROID);
+  $('outRow').classList.toggle('hidden', !canPickOutput);
+  if(canPickOutput){
+    const os=$('outDevice'), okeep=localStorage.getItem('outDeviceId')||'';
+    os.innerHTML='<option value="">по умолчанию (что выберет телефон)</option>';
+    outs.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId; o.textContent=d.label||`выход ${i+1}`;
+      os.appendChild(o);
+    });
+    if(okeep && outs.some(d=>d.deviceId===okeep)) os.value=okeep;
+  }
+
+  // Подсказка по платформе — чтобы не искать то, чего в системе нет
+  const ext=ins.filter(d=>EXTERNAL_MIC.test(d.label||'') && !BUILTIN_MIC.test(d.label||''));
+  const hint=$('micHint');
+  if(IS_IOS && ins.length<=1){
+    hint.innerHTML='⚠️ <b>Айфон отдаёт браузеру только встроенный микрофон</b> — это ограничение Safari, петличка тут не появится. Работай так: телефон на себе, колонка на роботе. Для петлички нужен Андроид.';
+  } else if(ext.length){
+    hint.innerHTML=`✅ Внешний микрофон найден: <b>${ext[0].label}</b>. Если он не выбран — выбери его в списке выше.`;
+    // сам не переключаю: молча подменённый вход — худший вид сюрприза на ивенте
+  } else {
+    hint.textContent='Если воткнута петличка (Lark, DJI) — выбери её здесь. Пока внешних микрофонов не видно.';
+  }
+  log(`🎙 Микрофонов: ${ins.length}${ext.length?' (внешний: '+ext[0].label+')':''} · выходов: ${outs.length}`);
 }
+
+$('outDevice').onchange=async()=>{
+  store('outDeviceId',$('outDevice').value);
+  const name=$('outDevice').selectedOptions[0]?.textContent||'по умолчанию';
+  if(!conv){ log('🔊 Выход выбран: '+name); return; }
+  try{ await conv.changeOutputDevice({outputDeviceId:outDeviceId()}); log('🔊 Выход переключён: '+name); }
+  catch(e){ log('⚠️ Выход переключить не вышло: '+(e?.message||e)); }
+};
 $('micDevice').onchange=async()=>{
   store('micDeviceId',$('micDevice').value);
   const name=$('micDevice').selectedOptions[0]?.textContent||'по умолчанию';
@@ -514,6 +570,7 @@ async function doConnect(isReconnect){
     conv=await Conversation.startSession({
       agentId: sessionCfg.agentId,
       inputDeviceId: micDeviceId(),   // пусто = как решит телефон
+      outputDeviceId: outDeviceId(),
       connectionType: connMode(),
       // Работает ТОЛЬКО в websocket-режиме: в webrtc SDK на эту опцию ругается.
       // Ищет вход со словом earphone/headphone/airpod в названии — так iOS
