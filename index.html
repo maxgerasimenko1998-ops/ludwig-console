@@ -552,7 +552,7 @@ async function hush(){
   try{ conv.setVolume({volume:0}); }catch{}       // тишина в ту же миллисекунду
   btn.textContent='⏳ Останавливаю…'; vibrate([80,50,80]);
   log('⏹ Стоп — обрываю генерацию');
-  clearTimeout(reconnectTimer);
+  clearTimeout(reconnectTimer); reconnectTimer=null;
   try{ await conv.endSession(); }catch{}
   conv=null; hushed=false; agentSpeaking=false; micWanted=false;
   document.body.classList.remove('s-listen','s-speak');
@@ -630,6 +630,7 @@ async function doConnect(isReconnect){
     refreshMicList();   // названия микрофонов видны только после разрешения
     iosKick();          // пинок маршрута — ТОЛЬКО после захвата, иначе 50/50
     levelStart();
+    clearTimeout(reconnectTimer); reconnectTimer=null;   // висящий таймер добил бы живую сессию
     reconnectTries=0;   // связь восстановилась — счётчик попыток сбрасываем
     $('reconnBanner').textContent='🔄 Связь прервалась — переподключаюсь…';
     $('reconnBanner').classList.add('hidden');
@@ -655,7 +656,7 @@ async function doConnect(isReconnect){
     // запросами разрешения. Сразу говорим человеку, что делать.
     if(/NotAllowed|Permission|denied|blocked/i.test(msg)){
       alert('Браузер не даёт доступ к микрофону.\n\nРазреши микрофон для этой страницы и нажми «Подключиться» заново.');
-      userStopping=true; clearTimeout(reconnectTimer); showSetup(); return;
+      userStopping=true; clearTimeout(reconnectTimer); reconnectTimer=null; showSetup(); return;
     }
     if(!userStopping){ scheduleReconnect(); }
     else { alert('Не удалось подключиться: '+msg); showSetup(); }
@@ -663,6 +664,9 @@ async function doConnect(isReconnect){
   finally{ connecting=false; }
 }
 function handleDisconnect(){
+  // doConnect сам закрывает старую сессию перед новой — её 'disconnected'
+  // не повод для реконнекта, иначе таймер убьёт СВЕЖУЮ сессию (гонка 30.07)
+  if(connecting){ conv=null; return; }
   levelStop();
   // Сессию, которую браузер считает мёртвой, сервер таковой НЕ считает: пока её
   // не закрыть явно, она живёт и продолжает говорить. Закрываем перед реконнектом.
@@ -684,7 +688,7 @@ function handleDisconnect(){
 let reconnectTries=0, lastConnErr='';
 const RECONNECT_MAX=6;
 function scheduleReconnect(){
-  clearTimeout(reconnectTimer);
+  if(reconnectTimer) return;   // попытка уже назначена — дубль от каскада 'disconnected' не плодим
   if(reconnectTries>=RECONNECT_MAX){
     log('🛑 Переподключиться не выходит. Проверь интернет и жми «Подключиться» заново.');
     $('reconnBanner').textContent='🛑 Связи нет — нажми «Подключиться» заново';
@@ -697,7 +701,7 @@ function scheduleReconnect(){
   const wait=Math.min(2000*Math.pow(2,reconnectTries), 30000);   // 2,4,8,16,30,30 сек
   reconnectTries++;
   $('reconnBanner').textContent=`🔄 Связь прервалась — попытка ${reconnectTries} из ${RECONNECT_MAX}…`;
-  reconnectTimer=setTimeout(()=>doConnect(true), wait);
+  reconnectTimer=setTimeout(()=>{ reconnectTimer=null; doConnect(true); }, wait);
 }
 
 $('connectBtn').onclick=async()=>{
@@ -873,7 +877,7 @@ $('stopBtn').onclick=async()=>{
   if(!stopArmed){ stopArmed=Date.now(); $('stopBtn').classList.add('arm'); $('stopBtn').textContent='Нажми ещё раз — точно завершить'; vibrate(30); stopTimer=setTimeout(()=>{ stopArmed=false; $('stopBtn').classList.remove('arm'); $('stopBtn').textContent='⏹ Завершить'; },3000); return; }
   // случайный ДВОЙНОЙ тап проходил обе проверки за миллисекунды — требуем паузу
   if(Date.now()-stopArmed < 600) return;
-  clearTimeout(stopTimer); userStopping=true; clearTimeout(reconnectTimer);
+  clearTimeout(stopTimer); userStopping=true; clearTimeout(reconnectTimer); reconnectTimer=null;
   if(conv) await conv.endSession();
   showSetup();
 };
@@ -881,7 +885,7 @@ $('stopBtn').onclick=async()=>{
 function showLive(){ $('setup').classList.add('hidden'); $('setup').style.display='none'; $('live').classList.remove('hidden'); $('live').style.display='flex'; renderBoard(); }
 function showSetup(){
   conv=null; micWanted=false; agentSpeaking=false; boardPlaying=false; stopArmed=false;
-  clearTimeout(tailTimer); clearTimeout(toggleTimer); clearTimeout(reconnectTimer);
+  clearTimeout(tailTimer); clearTimeout(toggleTimer); clearTimeout(reconnectTimer); reconnectTimer=null;
   try{wakeLock?.release?.();}catch{}
   document.body.classList.remove('s-listen','s-speak');
   $('reconnBanner').classList.add('hidden');
