@@ -590,6 +590,15 @@ async function doConnect(isReconnect){
   connecting=true;
   if(conv){ try{ await conv.endSession(); }catch{} conv=null; }
   audioSessionSet('auto');   // захват начинаем в 'auto', пинок будет после
+  // Отвалившееся устройство (петличка выдернута, сел приёмник) оставляет в
+  // select битый deviceId — websocket-режим падает на нём ВСЕМИ попытками.
+  if(navigator.mediaDevices?.enumerateDevices){
+    try{
+      const cur=await navigator.mediaDevices.enumerateDevices();
+      if(micDeviceId() && !cur.some(d=>d.deviceId===micDeviceId())){ $('micDevice').value=''; log('🎙 Выбранный микрофон исчез — беру по умолчанию'); }
+      if(outDeviceId() && !cur.some(d=>d.deviceId===outDeviceId())){ $('outDevice').value=''; }
+    }catch{}
+  }
   try{
     conv=await Conversation.startSession({
       agentId: sessionCfg.agentId,
@@ -628,6 +637,11 @@ async function doConnect(isReconnect){
     });
     setWanted(micMode()==='open'); try{refreshDirButtons();}catch{}
     refreshMicList();   // названия микрофонов видны только после разрешения
+    if(connMode()==='webrtc'){
+      // WebRTC-путь SDK игнорирует deviceId в startSession — применяем руками
+      if(micDeviceId()) try{ await conv.changeInputDevice({inputDeviceId:micDeviceId()}); }catch{}
+      if(outDeviceId()) try{ await conv.changeOutputDevice({outputDeviceId:outDeviceId()}); }catch{}
+    }
     iosKick();          // пинок маршрута — ТОЛЬКО после захвата, иначе 50/50
     levelStart();
     clearTimeout(reconnectTimer); reconnectTimer=null;   // висящий таймер добил бы живую сессию
@@ -899,6 +913,7 @@ function showSetup(){
 
 refreshPersonaList('Ludwig — боевой (промпт и лор из агента)');
 renderBoard();
+refreshMicList();   // сохранённый микрофон/выход должны работать уже с ПЕРВОГО подключения
 </script>
 </body>
 </html>
