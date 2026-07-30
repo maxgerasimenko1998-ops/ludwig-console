@@ -136,19 +136,6 @@
         <option value="toggle">🔁 Нажал-вкл / нажал-выкл (сам выключится через 15 сек)</option>
         <option value="open">📢 РУКИ СВОБОДНЫ — микрофон всегда открыт (как у поляков)</option>
       </select>
-      <label style="margin-top:10px">Какой микрофон слушать</label>
-      <select id="micDevice">
-        <option value="">по умолчанию (что выберет телефон)</option>
-      </select>
-      <p class="hint" id="micHint">Если воткнута петличка (Lark, DJI) — выбери её здесь.</p>
-
-      <div id="outRow" class="hidden">
-        <label style="margin-top:10px">Куда выводить звук</label>
-        <select id="outDevice">
-          <option value="">по умолчанию (что выберет телефон)</option>
-        </select>
-        <p class="hint">Выбери колонку робота. Работает не везде: на айфоне вывод держит система, там этот список пустой.</p>
-      </div>
       <div id="levelRow" style="display:flex;align-items:center;gap:8px;margin-top:6px">
         <span style="font-size:20px">🎙</span>
         <div style="flex:1;height:14px;background:#222;border-radius:7px;overflow:hidden">
@@ -156,14 +143,35 @@
         </div>
         <span id="levelTxt" class="hint" style="min-width:96px;text-align:right">микрофон закрыт</span>
       </div>
-      <label style="margin-top:10px">Способ связи</label>
-      <select id="connMode">
-        <option value="webrtc">Обычный (WebRTC) — быстрее, но микрофон выбирает айфон</option>
-        <option value="websocket">Для петлички (WebSocket) — можно навязать внешний микрофон</option>
-      </select>
-      <p class="hint">Айфон в режиме разговора упрямо слушает встроенный микрофон. Второй способ обходит это: сам ищет вход со словом «earphone/headphone» в названии — так iOS часто и обзывает петличку. Задержка чуть больше. <b>Меняется только при переподключении.</b></p>
-      <button id="micRetry" class="ghost" style="margin-top:4px">🔄 Переподключить микрофон</button>
-      <p class="hint">Жми, если полоска стоит на нуле или ты воткнул петличку уже после подключения. Заново захватывает вход, не разрывая разговор.</p>
+
+      <details style="margin-top:4px">
+        <summary>🔧 Звук — тонкая настройка (обычно не нужна)</summary>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-top:8px">
+          <label>Какой микрофон слушать</label>
+          <select id="micDevice">
+            <option value="">по умолчанию (что выберет телефон)</option>
+          </select>
+          <p class="hint" id="micHint">Если воткнута петличка (Lark, DJI) — выбери её здесь.</p>
+
+          <div id="outRow" class="hidden">
+            <label>Куда выводить звук</label>
+            <select id="outDevice">
+              <option value="">по умолчанию (что выберет телефон)</option>
+            </select>
+            <p class="hint">Выбери колонку робота. На айфоне списка нет — вывод держит система.</p>
+          </div>
+
+          <label>Способ связи</label>
+          <select id="connMode">
+            <option value="webrtc">Обычный (WebRTC) — быстрее</option>
+            <option value="websocket">Для петлички (WebSocket) — можно навязать внешний микрофон</option>
+          </select>
+          <p class="hint">Меняется только при переподключении.</p>
+
+          <button id="micRetry" class="ghost">🔄 Переподключить микрофон</button>
+          <p class="hint">Жми, если полоска на нуле или петличку воткнул уже после подключения.</p>
+        </div>
+      </details>
       <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
       <p class="hint">Мгновенно глушит звук <b>и обрывает генерацию</b> — токены больше не тратятся. Сам переподключается за пару секунд, контекст дня и все твои подсказки возвращаются автоматически. Теряется только текущая перепалка с гостем.</p>
       <p class="hint">«Всегда открыт» = робот сам ходит и болтает, оператор нужен один. Расплата: реагирует на посторонних и хуже слышит тихих. Себя он не слышит НИКОГДА, в любом режиме.</p>
@@ -576,6 +584,13 @@ document.addEventListener('visibilitychange',()=>{
 
 // Agent ID НЕ зашит в страницу: она будет лежать в интернете, и любой, кто
 // узнает адрес, мог бы говорить с агентом за наши деньги. Вводится один раз.
+// Agent ID можно передать прямо в ссылке (?agent=agent_...) — удобно для
+// нового браузера или телефона: память-то у каждого своя. Из адреса сразу
+// убираем, чтобы ID не светился при показе экрана.
+try{
+  const qa=new URLSearchParams(location.search).get('agent');
+  if(qa && /^agent_[a-z0-9]+$/i.test(qa)){ localStorage.setItem('ludwigAgentId',qa); history.replaceState(null,'',location.pathname); }
+}catch{}
 $('agentId').value=localStorage.getItem('ludwigAgentId')||'';
 $('dayCtx').value=localStorage.getItem('dayCtx')||'';
 function log(l){ const e=$('log'); e.textContent+=l+'\n'; e.scrollTop=e.scrollHeight; }
