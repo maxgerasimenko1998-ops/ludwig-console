@@ -650,6 +650,7 @@ async function doConnect(isReconnect){
   }catch(e){
     const msg=String(e?.name||'')+' '+String(e?.message||e);
     log('⚠️ Подключение не удалось: '+msg);
+    lastConnErr=msg;
     // Нет доступа к микрофону — повторять бессмысленно, будет только сыпать
     // запросами разрешения. Сразу говорим человеку, что делать.
     if(/NotAllowed|Permission|denied|blocked/i.test(msg)){
@@ -680,7 +681,7 @@ function handleDisconnect(){
 // Раньше долбил каждые 2 секунды ВЕЧНО. При мёртвой сети или запрещённом
 // микрофоне это заваливало экран запросами доступа и не давало понять,
 // что связи нет насовсем.
-let reconnectTries=0;
+let reconnectTries=0, lastConnErr='';
 const RECONNECT_MAX=6;
 function scheduleReconnect(){
   clearTimeout(reconnectTimer);
@@ -688,6 +689,8 @@ function scheduleReconnect(){
     log('🛑 Переподключиться не выходит. Проверь интернет и жми «Подключиться» заново.');
     $('reconnBanner').textContent='🛑 Связи нет — нажми «Подключиться» заново';
     vibrate([100,60,100,60,100]);
+    // показать ПРИЧИНУ крупно: по логу её никто не находит (Chrome iOS, 29.07)
+    if(lastConnErr) alert('Не подключается.\n\nПричина (пришли её как есть):\n'+lastConnErr);
     setTimeout(showSetup, 1500);
     return;
   }
