@@ -133,7 +133,6 @@
       <label>Режим микрофона</label>
       <select id="micMode">
         <option value="hold">🎤 Держать кнопку — надёжнее всего в шумной толпе</option>
-        <option value="toggle">🔁 Нажал-вкл / нажал-выкл (сам выключится через 15 сек)</option>
         <option value="open">📢 РУКИ СВОБОДНЫ — микрофон всегда открыт (как у поляков)</option>
       </select>
       <div id="levelRow" style="display:flex;align-items:center;gap:8px;margin-top:6px">
@@ -187,7 +186,7 @@
       <button id="dirMic" style="background:#b0431f">🎤 ШАГ 1 — надиктовать</button>
       <button id="dirBtn" disabled>🎬 ШАГ 2 — НОВЫЙ МОНОЛОГ</button>
       <button id="contBtn" disabled style="background:#2d6a4f">➕ ПРОДОЛЖИТЬ последний монолог</button>
-      <p class="hint"><b>Новый монолог:</b> ШАГ 1 (надиктовал по-русски) → ШАГ 2. Монолог на 40-60 сек, дальше обычный разговор.<br>
+      <p class="hint"><b>Надиктовал (ШАГ 1) — задание уходит роботу САМО, сразу.</b> ШАГ 2 нужен только если печатаешь задание руками. Монолог на 40-60 сек, дальше обычный разговор.<br>
       <b>Продолжить:</b> сменили точку или придумал добавку — снова ШАГ 1, но надиктуй <b>ТОЛЬКО добавку</b>, и жми «ПРОДОЛЖИТЬ». Он подхватит ту же тему, не поздоровается и не повторит сказанное. Разговор, который был между монологами, никуда не денется.<br>
       <b>Начать с чистого листа</b> (новая тема, другое место) — жми «⏹ СТОП» вверху, он переподключится, и дальше ШАГ 1 → ШАГ 2.</p>
       <p class="hint">Отличие от «скрытого контекста»: контекст робот просто запомнит и учтёт позже, а задание режиссёра он исполнит прямо сейчас — длинным монологом, с нужной первой фразой и настроением. Лимит в 3 предложения для этого ответа снимается.</p>
@@ -391,14 +390,20 @@ function setWanted(v){
 // Единственный способ увидеть ГЛАЗАМИ, что микрофон живой, до того как робот
 // промолчит в ответ. Уровень берём у самого SDK (getInputVolume): второй раз
 // открывать микрофон на iOS опасно — два захвата дерутся за один вход.
-let levelTimer=null, levelPeak=0, levelSilent=0;
+let levelTimer=null, levelPeak=0, levelSilent=0, levelTick=0;
 function levelStart(){
   clearInterval(levelTimer);
   levelPeak=0; levelSilent=0;
   levelTimer=setInterval(()=>{
     const bar=$('levelBar'), txt=$('levelTxt');
     if(!conv){ bar.style.width='0%'; txt.textContent='нет связи'; return; }
-    const open = micWanted && !agentSpeaking && !boardPlaying;
+    const open = micWanted && !agentSpeaking && !boardPlaying && !dictating;
+    // Микрофон закрыт НАМЕРЕННО (держу кнопку / надиктовка) — говорим серверу
+    // «оператор здесь», иначе робот через 20 сек сам лезет в тишину
+    // («Seid ihr noch da?» посреди надиктовки, поймано 31.07).
+    // В «руках свободных» с открытым микрофоном НЕ пингуем: там его попытки
+    // разговорить молчуна — нужное поведение.
+    if(++levelTick>=80){ levelTick=0; if(!open){ try{ conv.sendUserActivity?.(); }catch{} } }
     if(!open){
       bar.style.width='0%'; bar.style.background='#444';
       txt.textContent = dictating ? 'надиктовка — робот не слышит' : (agentSpeaking||boardPlaying ? 'робот говорит' : 'микрофон закрыт');
@@ -547,7 +552,8 @@ $('micRetry').onclick=()=>reacquireMic('вручную');
 
 // ---- режим микрофона ----
 const micMode = () => $('micMode').value;
-$('micMode').value = localStorage.getItem('micMode') || 'hold';   // запоминаем выбор
+// осталось два режима; сохранённый «toggle» со старых версий превращаем в hold
+$('micMode').value = (localStorage.getItem('micMode')==='open') ? 'open' : 'hold';
 $('micMode').onchange=()=>{
   clearTimeout(toggleTimer);
   const m=micMode();
@@ -926,7 +932,10 @@ wireDictation($('dirMic'), {
   label:'🎤 ШАГ 1 — надиктовать задание',
   done:t=>{
     $('dirInput').value=t; refreshDirButtons();
-    log('✅ Готово. Подведи робота и жми «ШАГ 2 — НАЧАТЬ СЦЕНУ»');
+    // Живой прогон 31.07: Макс закончил диктовать и ждал исполнения, а задание
+    // лежало в поле до ШАГ 2. В поле руки заняты — отправляем сразу.
+    if(conv){ sendRegie(t); hadMonologue=true; refreshDirButtons(); }
+    else log('⚠️ Связи нет — жми ▶️ ПРОДОЛЖИТЬ, задание сохранено в поле, потом ШАГ 2');
   }
 });
 // Реплика за гостя — уходит сразу, тут важна скорость
