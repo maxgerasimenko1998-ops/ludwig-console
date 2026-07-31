@@ -180,6 +180,7 @@
       <textarea id="dirInput" placeholder="напр. Wir stehen vor dem Roten Rathaus in Berlin. Du kandidierst als Bürgermeister. Halte eine lange Rede fürs Video: versprich, alle Straßen zu reparieren und Freibier für alle. Fordere die anderen Kandidaten zum Duell heraus. Beginne mit: „Mein Volk, Euer König hat entschieden!" Am Ende: folgt robotollern."></textarea>
       <button id="dirMic" style="background:#b0431f">🎤 ШАГ 1 — надиктовать</button>
       <button id="dirBtn" disabled>🎬 ШАГ 2 — НОВЫЙ МОНОЛОГ</button>
+      <button id="dlgBtn" disabled style="background:#7d5fc4">💬 НАЧАЛО ДИАЛОГА — короткий заход</button>
       <button id="contBtn" disabled style="background:#2d6a4f">➕ ПРОДОЛЖИТЬ последний монолог</button>
     </div>
 
@@ -937,16 +938,36 @@ function sendRegie(t){
 // не понимает, чем она отличается от «надиктовать»
 let hadMonologue=false;   // «продолжить» имеет смысл только после первого монолога
 function refreshDirButtons(){
+  // Кнопки горят от ТЕКСТА, а не от связи: во время паузы Макс вставлял
+  // задание, а ШАГ 2 был серым и молчал (31.07). Связь поднимет само нажатие.
   const has=!!$('dirInput').value.trim();
-  $('dirBtn').disabled=!(has&&conv);
-  $('dirBtn').style.background=(has&&conv)?'#1e8449':'';
-  $('contBtn').disabled=!(has&&conv&&hadMonologue);
-  $('contBtn').style.background=(has&&conv&&hadMonologue)?'#2d6a4f':'';
+  $('dirBtn').disabled=!has;
+  $('dirBtn').style.background=has?'#1e8449':'';
+  $('dlgBtn').disabled=!has;
+  $('contBtn').disabled=!(has&&hadMonologue);
+  $('contBtn').style.background=(has&&hadMonologue)?'#2d6a4f':'';
+}
+async function ensureConn(){
+  if(!conv && !connecting){ flash('▶️ Подключаю…'); await doConnect(true); }
+  return !!conv;
 }
 $('dirInput').addEventListener('input',refreshDirButtons);
-$('dirBtn').onclick=()=>{ sendRegie($('dirInput').value.trim()); hadMonologue=true; refreshDirButtons(); };
-$('contBtn').onclick=()=>{
+$('dirBtn').onclick=async()=>{
   const t=$('dirInput').value.trim(); if(!t) return;
+  if(!await ensureConn()) return;
+  sendRegie(t); hadMonologue=true; refreshDirButtons();
+};
+// «Начало диалога»: то же задание, но робот НЕ читает речь на минуту,
+// а открывает сцену парой фраз и ждёт ответа — дальше обычный разговор.
+$('dlgBtn').onclick=async()=>{
+  const t=$('dirInput').value.trim(); if(!t) return;
+  if(!await ensureConn()) return;
+  sendRegie(t+'\n\nWICHTIG: Diesmal KEIN langer Monolog. Eröffne die Szene mit ein bis drei Sätzen — ein Gesprächsauftakt, keine Rede. Dann halte inne und lass dein Gegenüber antworten. Danach normales Gespräch.');
+  refreshDirButtons();
+};
+$('contBtn').onclick=async()=>{
+  const t=$('dirInput').value.trim(); if(!t) return;
+  if(!await ensureConn()) return;
   // «продолжить», а не «начать заново»: тему берёт из СВОЕГО последнего монолога,
   // разговор, случившийся между монологами, при этом не игнорируется
   sendRegie('WEITER: Setze deinen LETZTEN Monolog fort — dieselbe Szene, dasselbe Thema. '
@@ -961,7 +982,7 @@ wireDictation($('dirMic'), {
   label:'🎤 ШАГ 1 — надиктовать задание',
   done:async t=>{
     $('dirInput').value=t; refreshDirButtons();
-    if(!conv && !connecting){ log('▶️ Возвращаю связь и отдаю задание…'); dictResume=false; await doConnect(true); }
+    if(!conv && !connecting){ log('▶️ Возвращаю связь и отдаю задание…'); await doConnect(true); }
     if(conv){ sendRegie(t); hadMonologue=true; refreshDirButtons(); }
     else log('⚠️ Связь не поднялась — задание в поле: жми ▶️ ПРОДОЛЖИТЬ, потом ШАГ 2');
   }
