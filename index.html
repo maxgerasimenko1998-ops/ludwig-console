@@ -510,6 +510,16 @@ function audioSessionSet(type, why){
 }
 async function iosKick(){
   if(!IS_IOS || !navigator.audioSession) return;
+  // 'play-and-record' перещёлкивает маршрут на гарнитуру. Но если гарнитуры
+  // НЕТ (микрофон встроенный, колонка Sonos по A2DP) — тот же пинок может
+  // утащить звук с колонки в динамик телефона. Пинаем только при гарнитуре.
+  let hasHeadset=false;
+  try{
+    const ins=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');
+    hasHeadset=ins.some(d=>d.label && !BUILTIN_MIC.test(d.label)
+      && (EXTERNAL_MIC.test(d.label) || /wireless|microphone/i.test(d.label)));
+  }catch{}
+  if(!hasHeadset) return;
   await new Promise(r=>setTimeout(r, 350));      // дать захвату устояться
   audioSessionSet('play-and-record','пинок маршрута');
 }
