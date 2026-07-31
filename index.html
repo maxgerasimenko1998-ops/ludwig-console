@@ -153,27 +153,31 @@
           </select>
           <p class="hint" id="micHint">Если воткнута петличка (Lark, DJI) — выбери её здесь.</p>
 
-          <div id="outRow" class="hidden">
-            <label>Куда выводить звук</label>
-            <select id="outDevice">
-              <option value="">по умолчанию (что выберет телефон)</option>
-            </select>
-            <p class="hint">Выбери колонку робота. На айфоне списка нет — вывод держит система.</p>
-          </div>
-
-          <label>Способ связи</label>
-          <select id="connMode">
-            <option value="webrtc">Обычный (WebRTC) — быстрее</option>
-            <option value="websocket">Для петлички (WebSocket) — можно навязать внешний микрофон</option>
-          </select>
-          <p class="hint">Меняется только при переподключении.</p>
-
           <button id="micRetry" class="ghost">🔄 Переподключить микрофон</button>
           <p class="hint">Жми, если полоска на нуле или петличку воткнул уже после подключения.</p>
+
+          <details>
+            <summary>⚙️ Совсем техническое — работает, не трогай</summary>
+            <div style="display:flex;flex-direction:column;gap:9px;margin-top:8px">
+              <div id="outRow" class="hidden">
+                <label>Куда выводить звук</label>
+                <select id="outDevice">
+                  <option value="">по умолчанию (что выберет телефон)</option>
+                </select>
+                <p class="hint">Появляется только там, где телефон отдаёт список (Андроид).</p>
+              </div>
+              <label>Способ связи</label>
+              <select id="connMode">
+                <option value="webrtc">Обычный (WebRTC) — быстрее</option>
+                <option value="websocket">Для петлички (WebSocket) — можно навязать внешний микрофон</option>
+              </select>
+              <p class="hint">Как настроено — так и работает. Менять только если попрошу; вступает в силу при переподключении.</p>
+            </div>
+          </details>
         </div>
       </details>
       <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
-      <p class="hint">Мгновенно глушит звук <b>и обрывает генерацию</b> — токены больше не тратятся. Сам переподключается за пару секунд, контекст дня и все твои подсказки возвращаются автоматически. Теряется только текущая перепалка с гостем.</p>
+      <p class="hint">Мгновенно глушит звук <b>и обрывает генерацию</b>. Дальше — <b>полная тишина</b>: робот молчит и не слушает, пока не нажмёшь большую кнопку <b>▶️ ПРОДОЛЖИТЬ</b>. Контекст дня и подсказки вернутся сами при продолжении.</p>
       <p class="hint">«Всегда открыт» = робот сам ходит и болтает, оператор нужен один. Расплата: реагирует на посторонних и хуже слышит тихих. Себя он не слышит НИКОГДА, в любом режиме.</p>
     </div>
 
@@ -355,15 +359,23 @@ $('addClip').onclick=()=>{
 
 // ---- микрофон: предохранитель ----
 function applyMic(){
-  if(!conv) return;
-  const open = micWanted && !agentSpeaking && !boardPlaying;
-  try{ conv.setMicMuted(!open); }catch{}
   const ptt=$('ptt');
+  if(!conv){
+    if(paused){
+      ptt.classList.remove('live','locked');
+      document.body.classList.remove('s-listen','s-speak');
+      ptt.innerHTML='▶️ ПРОДОЛЖИТЬ<br><small>пауза — робот молчит и не слушает</small>';
+    }
+    return;
+  }
+  const open = micWanted && !agentSpeaking && !boardPlaying && !dictating;
+  try{ conv.setMicMuted(!open); }catch{}
   ptt.classList.toggle('live', open);
   ptt.classList.toggle('locked', micWanted && (agentSpeaking||boardPlaying));
   document.body.classList.toggle('s-listen', open);
   document.body.classList.toggle('s-speak', agentSpeaking||boardPlaying);
   if(open) ptt.innerHTML='🔴 СЛУШАЮ<br><small>микрофон ВКЛЮЧЁН</small>';
+  else if(dictating) ptt.innerHTML='📝 НАДИКТОВКА<br><small>робот тебя сейчас НЕ слышит</small>';
   else if(micWanted && (agentSpeaking||boardPlaying)) ptt.innerHTML='⏸ ЖДУ<br><small>робот говорит — микрофон закрыт</small>';
   else ptt.innerHTML='🎤 ГОВОРИТЬ<br><small>микрофон выключен</small>';
 }
@@ -389,7 +401,7 @@ function levelStart(){
     const open = micWanted && !agentSpeaking && !boardPlaying;
     if(!open){
       bar.style.width='0%'; bar.style.background='#444';
-      txt.textContent = agentSpeaking||boardPlaying ? 'робот говорит' : 'микрофон закрыт';
+      txt.textContent = dictating ? 'надиктовка — робот не слышит' : (agentSpeaking||boardPlaying ? 'робот говорит' : 'микрофон закрыт');
       levelSilent=0; return;
     }
     let v=0;
@@ -551,7 +563,7 @@ let hushed=false;
 // Просто глушить мало: сервер договаривает фразу до конца и жжёт токены.
 // Поэтому глушим МГНОВЕННО, следом рвём сессию (генерация останавливается)
 // и сразу переподключаемся — контекст дня и подсказки восстановятся сами.
-let stopping=false;
+let stopping=false, paused=false, dictating=false;
 function hushMaybeRelease(){}   // защёлка больше не нужна: стоп рвёт сессию целиком
 async function hush(){
   if(!conv||stopping) return;
@@ -559,14 +571,25 @@ async function hush(){
   const btn=$('hushBtn');
   try{ conv.setVolume({volume:0}); }catch{}       // тишина в ту же миллисекунду
   btn.textContent='⏳ Останавливаю…'; vibrate([80,50,80]);
-  log('⏹ Стоп — обрываю генерацию');
+  log('⏹ Стоп — обрываю. ПАУЗА: продолжение — большой кнопкой');
   clearTimeout(reconnectTimer); reconnectTimer=null;
+  // Раньше СТОП сам переподключался — и робот тут же оживал: открывал
+  // микрофон в «руках свободных» и выдавал вступительную реплику на
+  // восстановленный контекст. Макс (31.07): «стоп не помогает, он опять
+  // продолжает». Теперь СТОП = полная тишина до нажатия ПРОДОЛЖИТЬ.
+  paused=true;
   try{ await conv.endSession(); }catch{}
   conv=null; hushed=false; agentSpeaking=false; micWanted=false;
   document.body.classList.remove('s-listen','s-speak');
-  await doConnect(true);
   btn.textContent='⏹ СТОП — замолчать';
   stopping=false;
+  applyMic();
+}
+async function resume(){
+  if(conv||connecting) return;
+  $('ptt').innerHTML='⏳ Подключаю…';
+  log('▶️ Продолжаю после паузы');
+  await doConnect(true);
 }
 function unhush(){ hushed=false; }
 $('hushBtn').onclick=hush;
@@ -602,7 +625,7 @@ function log(l){ const e=$('log'); e.textContent+=l+'\n'; e.scrollTop=e.scrollHe
 let connecting=false;
 async function doConnect(isReconnect){
   if(connecting){ log('… подключение уже идёт, повтор пропущен'); return; }
-  connecting=true;
+  connecting=true; paused=false;
   if(conv){ try{ await conv.endSession(); }catch{} conv=null; }
   audioSessionSet('auto');   // захват начинаем в 'auto', пинок будет после
   // Отвалившееся устройство (петличка выдернута, сел приёмник) оставляет в
@@ -696,6 +719,12 @@ function handleDisconnect(){
   // doConnect сам закрывает старую сессию перед новой — её 'disconnected'
   // не повод для реконнекта, иначе таймер убьёт СВЕЖУЮ сессию (гонка 30.07)
   if(connecting){ conv=null; return; }
+  if(paused){
+    // СТОП уже всё закрыл — «disconnected» от него не повод переподключаться
+    conv=null; agentSpeaking=false; boardPlaying=false; micWanted=false;
+    levelStop(); document.body.classList.remove('s-listen','s-speak');
+    applyMic(); return;
+  }
   levelStop();
   // Сессию, которую браузер считает мёртвой, сервер таковой НЕ считает: пока её
   // не закрыть явно, она живёт и продолжает говорить. Закрываем перед реконнектом.
@@ -767,6 +796,7 @@ ptt.addEventListener('pointerdown',e=>{
   // без захвата указателя палец, соскользнувший с кнопки в толпе,
   // не доставит pointerup — и микрофон остался бы открытым
   try{ ptt.setPointerCapture(e.pointerId); }catch{}
+  if(!conv){ resume(); return; }   // из паузы/обрыва — сначала подключиться
   isHold()?setWanted(true):setWanted(!micWanted);
 });
 ptt.addEventListener('pointerup',e=>{ e.preventDefault(); if(isHold()) setWanted(false); });
@@ -801,6 +831,9 @@ let rec=null, recChunks=[], recStream=null;
 async function dictStart(btn,cfg){
   const key=$('apiKey').value.trim();
   if(!key){ alert('Вставь ключ ElevenLabs на первом экране — без него надиктовка не работает'); return; }
+  // Пока оператор надиктовывает, агент НЕ должен это слышать и отвечать
+  // (31.07: в «руках свободных» он ловил надиктовку как реплику гостя)
+  dictating=true; applyMic();
   try{
     recStream=await navigator.mediaDevices.getUserMedia({audio:true});
     recChunks=[]; rec=new MediaRecorder(recStream);
@@ -809,7 +842,7 @@ async function dictStart(btn,cfg){
     btn.textContent='✅ Я ЗАКОНЧИЛ';
     btn.style.background='#c0392b';
     log('🎙 Говори…'); vibrate(40);
-  }catch(e){ log('⚠️ Микрофон для надиктовки недоступен: '+(e?.message||e)); }
+  }catch(e){ log('⚠️ Микрофон для надиктовки недоступен: '+(e?.message||e)); dictating=false; applyMic(); }
 }
 
 async function dictStop(btn,cfg){
@@ -839,6 +872,9 @@ async function dictStop(btn,cfg){
 }
 function dictReset(btn,cfg){
   btn.textContent=cfg.label; btn.style.background='#b0431f'; rec=null;
+  dictating=false;
+  if(micMode()==='open' && conv) micWanted=true;   // руки свободны — вернуть эфир
+  applyMic();
 }
 // cfg = { label, done(text) }
 function wireDictation(btn,cfg){
