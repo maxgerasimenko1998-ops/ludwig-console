@@ -153,7 +153,6 @@
           <p class="hint" id="micHint">Если воткнута петличка (Lark, DJI) — выбери её здесь.</p>
 
           <button id="micRetry" class="ghost">🔄 Переподключить микрофон</button>
-          <p class="hint">Жми, если полоска на нуле или петличку воткнул уже после подключения.</p>
 
           <details>
             <summary>⚙️ Совсем техническое — работает, не трогай</summary>
@@ -163,37 +162,29 @@
                 <select id="outDevice">
                   <option value="">по умолчанию (что выберет телефон)</option>
                 </select>
-                <p class="hint">Появляется только там, где телефон отдаёт список (Андроид).</p>
               </div>
               <label>Способ связи</label>
               <select id="connMode">
                 <option value="webrtc">Обычный (WebRTC) — быстрее</option>
                 <option value="websocket">Для петлички (WebSocket) — можно навязать внешний микрофон</option>
               </select>
-              <p class="hint">Как настроено — так и работает. Менять только если попрошу; вступает в силу при переподключении.</p>
             </div>
           </details>
         </div>
       </details>
       <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
-      <p class="hint">Мгновенно глушит звук <b>и обрывает генерацию</b>. Дальше — <b>полная тишина</b>: робот молчит и не слушает, пока не нажмёшь большую кнопку <b>▶️ ПРОДОЛЖИТЬ</b>. Контекст дня и подсказки вернутся сами при продолжении.</p>
-      <p class="hint">«Всегда открыт» = робот сам ходит и болтает, оператор нужен один. Расплата: реагирует на посторонних и хуже слышит тихих. Себя он не слышит НИКОГДА, в любом режиме.</p>
     </div>
 
     <div class="card">
-      <label>🎬 РЕЖИССЁР — задание на монолог (аудитория не слышит; робот ИСПОЛНИТ, а не ответит)</label>
+      <label>🎬 РЕЖИССЁР — робот исполнит (аудитория не слышит)</label>
       <textarea id="dirInput" placeholder="напр. Wir stehen vor dem Roten Rathaus in Berlin. Du kandidierst als Bürgermeister. Halte eine lange Rede fürs Video: versprich, alle Straßen zu reparieren und Freibier für alle. Fordere die anderen Kandidaten zum Duell heraus. Beginne mit: „Mein Volk, Euer König hat entschieden!" Am Ende: folgt robotollern."></textarea>
       <button id="dirMic" style="background:#b0431f">🎤 ШАГ 1 — надиктовать</button>
       <button id="dirBtn" disabled>🎬 ШАГ 2 — НОВЫЙ МОНОЛОГ</button>
       <button id="contBtn" disabled style="background:#2d6a4f">➕ ПРОДОЛЖИТЬ последний монолог</button>
-      <p class="hint"><b>Надиктовал (ШАГ 1) — задание уходит роботу САМО, сразу.</b> ШАГ 2 нужен только если печатаешь задание руками. Монолог на 40-60 сек, дальше обычный разговор.<br>
-      <b>Продолжить:</b> сменили точку или придумал добавку — снова ШАГ 1, но надиктуй <b>ТОЛЬКО добавку</b>, и жми «ПРОДОЛЖИТЬ». Он подхватит ту же тему, не поздоровается и не повторит сказанное. Разговор, который был между монологами, никуда не денется.<br>
-      <b>Начать с чистого листа</b> (новая тема, другое место) — жми «⏹ СТОП» вверху, он переподключится, и дальше ШАГ 1 → ШАГ 2.</p>
-      <p class="hint">Отличие от «скрытого контекста»: контекст робот просто запомнит и учтёт позже, а задание режиссёра он исполнит прямо сейчас — длинным монологом, с нужной первой фразой и настроением. Лимит в 3 предложения для этого ответа снимается.</p>
     </div>
 
     <div class="card">
-      <label>🎬 Точные фразы (звук записан заранее — робот скажет слово-в-слово)</label>
+      <label>🔊 Точные фразы — слово-в-слово</label>
       <div class="board" id="board"></div>
       <details>
         <summary>➕ Добавить точную фразу (аудиофайл)</summary>
@@ -201,26 +192,24 @@
           <input id="clipLabel" placeholder="Название кнопки (напр. Слоган Samsung)">
           <input id="clipFile" type="file" accept="audio/*">
           <button class="ghost" id="addClip">Добавить</button>
-          <p class="hint">Сгенерируй фразу в ElevenLabs тем же голосом, скачай mp3 и добавь сюда. Так слоган/указ звучит точно, без переделки от ИИ.</p>
         </div>
       </details>
     </div>
 
     <div class="card">
-      <label>Скрытый контекст — аудитория НЕ слышит, робот учтёт в следующем ответе</label>
+      <label>📩 Скрытый контекст — учтёт в следующем ответе</label>
       <textarea id="ctxInput" placeholder="напр. Du stehst vor einem Engeldenkmal. Beschreibe es, sei begeistert."></textarea>
       <button id="sendCtx">📩 Отправить контекст</button>
       <div class="quick" id="quickCtx"></div>
     </div>
 
     <div class="card">
-      <label>🗣 Сказать ЗА гостя — запасной вариант, если микрофон умер</label>
+      <label>🗣 Сказать ЗА гостя</label>
       <textarea id="sayInput" placeholder="напр. Wo hast du dein rotes T-Shirt gekauft?"></textarea>
       <div class="row">
         <button id="sayMic" style="background:#b0431f">🎤 Надиктовать</button>
         <button id="sayBtn">🗣 Отправить</button>
       </div>
-      <p class="hint">Робот решит, что это сказал гость, и ответит ему. Нужно, когда сломался микрофон или гость молчит/говорит слишком тихо — шоу продолжается без паузы.</p>
     </div>
 
     <div class="row">
@@ -391,7 +380,7 @@ function setWanted(v){
 // промолчит в ответ. Уровень берём у самого SDK (getInputVolume): второй раз
 // открывать микрофон на iOS опасно — два захвата дерутся за один вход.
 let levelTimer=null, levelPeak=0, levelSilent=0, levelTick=0;
-let awaitingReply=false, awaitTimer=null;   // отправили задание/реплику — робот ДОЛЖЕН заговорить
+let awaitingReply=false, awaitTimer=null, dictResume=false;   // отправили задание/реплику — робот ДОЛЖЕН заговорить
 function expectReply(){
   awaitingReply=true; clearTimeout(awaitTimer);
   awaitTimer=setTimeout(()=>{ awaitingReply=false; }, 90000);  // страховка
@@ -860,9 +849,18 @@ let rec=null, recChunks=[], recStream=null;
 async function dictStart(btn,cfg){
   const key=$('apiKey').value.trim();
   if(!key){ alert('Вставь ключ ElevenLabs на первом экране — без него надиктовка не работает'); return; }
-  // Пока оператор надиктовывает, агент НЕ должен это слышать и отвечать
-  // (31.07: в «руках свободных» он ловил надиктовку как реплику гостя)
   dictating=true; applyMic();
+  // Chrome (особенно на айфоне) не даёт открыть ВТОРОЙ микрофон, пока первый
+  // занят разговором — кнопка выглядела «неактивной» (31.07). Поэтому на время
+  // надиктовки разговор ставится на паузу: микрофон свободен, после
+  // расшифровки пульт сам переподключится и отдаст задание.
+  if(conv){
+    dictResume=true; paused=true;
+    try{ await conv.endSession(); }catch{}
+    conv=null; agentSpeaking=false; micWanted=false;
+    document.body.classList.remove('s-listen','s-speak');
+    log('⏸ Пауза на надиктовку');
+  } else dictResume=false;
   try{
     recStream=await navigator.mediaDevices.getUserMedia({audio:true});
     recChunks=[]; rec=new MediaRecorder(recStream);
@@ -871,7 +869,12 @@ async function dictStart(btn,cfg){
     btn.textContent='✅ Я ЗАКОНЧИЛ';
     btn.style.background='#c0392b';
     log('🎙 Говори…'); vibrate(40);
-  }catch(e){ log('⚠️ Микрофон для надиктовки недоступен: '+(e?.message||e)); dictating=false; applyMic(); }
+  }catch(e){
+    log('⚠️ Микрофон для надиктовки недоступен: '+(e?.message||e));
+    alert('Микрофон не открылся для надиктовки. Набери задание текстом (можно вставить из Telegram) и жми ШАГ 2.');
+    dictating=false; applyMic();
+    if(dictResume){ dictResume=false; if(!conv&&!connecting) doConnect(true); }
+  }
 }
 
 async function dictStop(btn,cfg){
@@ -881,7 +884,7 @@ async function dictStop(btn,cfg){
   try{ recStream.getTracks().forEach(t=>t.stop()); }catch{}
   btn.textContent='⏳ Расшифровываю…';
   const blob=new Blob(recChunks,{type:rec.mimeType||'audio/webm'});
-  if(blob.size<2000){ log('⚠️ Слишком коротко'); dictReset(btn,cfg); return; }
+  if(blob.size<2000){ log('⚠️ Слишком коротко'); await dictReset(btn,cfg); return; }
   try{
     const fd=new FormData();
     fd.append('file',blob,'a.webm');
@@ -889,19 +892,21 @@ async function dictStop(btn,cfg){
     fd.append('tag_audio_events','false');
     const r=await fetch('https://api.elevenlabs.io/v1/speech-to-text',
       {method:'POST',headers:{'xi-api-key':$('apiKey').value.trim()},body:fd});
-    if(!r.ok){ log('⚠️ Расшифровка не удалась: '+r.status); dictReset(btn,cfg); return; }
+    if(!r.ok){ log('⚠️ Расшифровка не удалась: '+r.status); await dictReset(btn,cfg); return; }
     const d=await r.json();
     const text=(d.text||'').trim();
-    if(!text){ log('⚠️ Ничего не распознал'); dictReset(btn,cfg); return; }
+    if(!text){ log('⚠️ Ничего не распознал'); await dictReset(btn,cfg); return; }
     log('📝 Услышал: '+text);
-    cfg.done(text);
+    await cfg.done(text);
     vibrate([30,30,30]);
   }catch(e){ log('⚠️ '+(e?.message||e)); }
-  dictReset(btn,cfg);
+  await dictReset(btn,cfg);
 }
-function dictReset(btn,cfg){
+async function dictReset(btn,cfg){
   btn.textContent=cfg.label; btn.style.background='#b0431f'; rec=null;
   dictating=false;
+  // если ради надиктовки ставили паузу и её никто ещё не снял — возвращаем связь
+  if(dictResume){ dictResume=false; if(!conv&&!connecting) await doConnect(true); }
   if(micMode()==='open' && conv) micWanted=true;   // руки свободны — вернуть эфир
   applyMic();
 }
@@ -954,12 +959,11 @@ $('contBtn').onclick=()=>{
 // потом отдельной кнопкой запускаешь сцену — когда подвёл робота к нужному месту.
 wireDictation($('dirMic'), {
   label:'🎤 ШАГ 1 — надиктовать задание',
-  done:t=>{
+  done:async t=>{
     $('dirInput').value=t; refreshDirButtons();
-    // Живой прогон 31.07: Макс закончил диктовать и ждал исполнения, а задание
-    // лежало в поле до ШАГ 2. В поле руки заняты — отправляем сразу.
+    if(!conv && !connecting){ log('▶️ Возвращаю связь и отдаю задание…'); dictResume=false; await doConnect(true); }
     if(conv){ sendRegie(t); hadMonologue=true; refreshDirButtons(); }
-    else log('⚠️ Связи нет — жми ▶️ ПРОДОЛЖИТЬ, задание сохранено в поле, потом ШАГ 2');
+    else log('⚠️ Связь не поднялась — задание в поле: жми ▶️ ПРОДОЛЖИТЬ, потом ШАГ 2');
   }
 });
 // Реплика за гостя — уходит сразу, тут важна скорость
