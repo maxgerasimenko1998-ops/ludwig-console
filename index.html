@@ -281,13 +281,13 @@ function fillPersonaEditor(){
 }
 $('personaSel').onchange=fillPersonaEditor;
 $('savePersona').onclick=()=>{
-  const name=$('pName').value.trim(); if(!name){alert('Введите имя персоны');return;}
+  const name=$('pName').value.trim(); if(!name){ flash('⚠️ Введи имя персоны'); return; }
   personas[name]={ prompt:$('pPrompt').value.trim(), first:$('pFirst').value.trim(), lang:$('pLang').value.trim(), voice:$('pVoice').value.trim() };
-  saveUserPersonas(personas); refreshPersonaList(name); alert('Сохранено: '+name);
+  saveUserPersonas(personas); refreshPersonaList(name); flash('💾 Сохранено: '+name);
 };
 $('delPersona').onclick=()=>{
   const name=$('personaSel').value;
-  if(name in DEFAULT_PERSONAS){alert('Встроенную персону удалить нельзя');return;}
+  if(name in DEFAULT_PERSONAS){ flash('⚠️ Встроенную персону удалить нельзя'); return; }
   delete personas[name]; saveUserPersonas(personas); refreshPersonaList();
 };
 
@@ -339,7 +339,7 @@ boardAudio.onended=()=>{
 boardAudio.onerror=()=>releaseBoard('⚠️ Ошибка звука клипа');
 $('addClip').onclick=()=>{
   const label=$('clipLabel').value.trim(); const f=$('clipFile').files[0];
-  if(!label||!f){alert('Название и файл');return;}
+  if(!label||!f){ flash('⚠️ Нужны название и файл'); return; }
   const r=new FileReader();
   r.onload=()=>{ clips.push({label,data:r.result}); store('clips',JSON.stringify(clips)); $('clipLabel').value=''; $('clipFile').value=''; renderBoard(); };
   r.readAsDataURL(f);
@@ -380,7 +380,7 @@ function setWanted(v){
 // промолчит в ответ. Уровень берём у самого SDK (getInputVolume): второй раз
 // открывать микрофон на iOS опасно — два захвата дерутся за один вход.
 let levelTimer=null, levelPeak=0, levelSilent=0, levelTick=0;
-let awaitingReply=false, awaitTimer=null, dictResume=false;   // отправили задание/реплику — робот ДОЛЖЕН заговорить
+let awaitingReply=false, awaitTimer=null;   // отправили задание/реплику — робот ДОЛЖЕН заговорить
 function expectReply(){
   awaitingReply=true; clearTimeout(awaitTimer);
   awaitTimer=setTimeout(()=>{ awaitingReply=false; }, 90000);  // страховка
@@ -634,6 +634,10 @@ try{
 $('agentId').value=localStorage.getItem('ludwigAgentId')||'';
 $('dayCtx').value=localStorage.getItem('dayCtx')||'';
 function log(l){ const e=$('log'); e.textContent+=l+'\n'; e.scrollTop=e.scrollHeight; }
+// НИКАКИХ alert(): Chrome предлагает «Dialogfelder unterdrücken», после чего
+// все окна молча исчезают навсегда — и пульт «просто не работает» (31.07).
+function flash(m){ const b=$('reconnBanner'); b.textContent=m; b.classList.remove('hidden');
+  clearTimeout(flash._t); flash._t=setTimeout(()=>b.classList.add('hidden'), 7000); }
 
 // Живая сессия должна быть РОВНО ОДНА. Сервер сам старую не закрывает, и две
 // параллельные = два Людвига говорят одновременно (поймано вживую 29.07: смена
@@ -725,11 +729,17 @@ async function doConnect(isReconnect){
     // Нет доступа к микрофону — повторять бессмысленно, будет только сыпать
     // запросами разрешения. Сразу говорим человеку, что делать.
     if(/NotAllowed|Permission|denied|blocked/i.test(msg)){
-      alert('Браузер не даёт доступ к микрофону.\n\nРазреши микрофон для этой страницы и нажми «Подключиться» заново.');
-      userStopping=true; clearTimeout(reconnectTimer); reconnectTimer=null; showSetup(); return;
+      // Chrome возвращает микрофон только по НАЖАТИЮ пальцем. Большая кнопка
+      // ▶️ ПРОДОЛЖИТЬ и есть это нажатие — по нему Chrome спросит разрешение
+      // заново. Раньше тут был каскад: окно → серый экран → только новая вкладка.
+      clearTimeout(reconnectTimer); reconnectTimer=null; reconnectTries=0;
+      paused=true; applyMic();
+      flash('🎤 Chrome забрал микрофон — жми большую кнопку ▶️ ПРОДОЛЖИТЬ');
+      log('🎤 Микрофон отобран браузером; жду нажатия ПРОДОЛЖИТЬ');
+      return;
     }
     if(!userStopping){ scheduleReconnect(); }
-    else { alert('Не удалось подключиться: '+msg); showSetup(); }
+    else { flash('⚠️ Не удалось подключиться: '+msg.slice(0,90)); showSetup(); }
   }
   finally{ connecting=false; }
 }
@@ -770,7 +780,7 @@ function scheduleReconnect(){
     $('reconnBanner').textContent='🛑 Связи нет — нажми «Подключиться» заново';
     vibrate([100,60,100,60,100]);
     // показать ПРИЧИНУ крупно: по логу её никто не находит (Chrome iOS, 29.07)
-    if(lastConnErr) alert('Не подключается.\n\nПричина (пришли её как есть):\n'+lastConnErr);
+    if(lastConnErr){ log('🛑 Причина: '+lastConnErr); flash('🛑 Не подключается: '+lastConnErr.slice(0,110)); }
     setTimeout(showSetup, 1500);
     return;
   }
@@ -782,7 +792,7 @@ function scheduleReconnect(){
 
 $('connectBtn').onclick=async()=>{
   const agentId=$('agentId').value.trim();
-  if(!agentId){alert('Вставьте Agent ID');return;}
+  if(!agentId){ flash('⚠️ Вставь Agent ID'); return; }
   store('ludwigAgentId',agentId);
   store('xiKey',$('apiKey').value.trim());
   const p=personas[$('personaSel').value]||{};
@@ -848,19 +858,11 @@ let rec=null, recChunks=[], recStream=null;
 // оператор держит пульт в одной руке, второй управляет телом робота.
 async function dictStart(btn,cfg){
   const key=$('apiKey').value.trim();
-  if(!key){ alert('Вставь ключ ElevenLabs на первом экране — без него надиктовка не работает'); return; }
+  if(!key){ flash('🔑 Нет ключа ElevenLabs — впиши его на первом экране'); log('⚠️ Надиктовка: нет ключа'); return; }
+  // Сессию НЕ трогаем: обрыв ради записи рушил разрешения Chrome каскадом
+  // (31.07: после ШАГ 1 умирал даже обычный разговор до полной перезагрузки).
+  // Микрофон агента просто закрыт флагом — робот надиктовку не слышит.
   dictating=true; applyMic();
-  // Chrome (особенно на айфоне) не даёт открыть ВТОРОЙ микрофон, пока первый
-  // занят разговором — кнопка выглядела «неактивной» (31.07). Поэтому на время
-  // надиктовки разговор ставится на паузу: микрофон свободен, после
-  // расшифровки пульт сам переподключится и отдаст задание.
-  if(conv){
-    dictResume=true; paused=true;
-    try{ await conv.endSession(); }catch{}
-    conv=null; agentSpeaking=false; micWanted=false;
-    document.body.classList.remove('s-listen','s-speak');
-    log('⏸ Пауза на надиктовку');
-  } else dictResume=false;
   try{
     recStream=await navigator.mediaDevices.getUserMedia({audio:true});
     recChunks=[]; rec=new MediaRecorder(recStream);
@@ -870,10 +872,9 @@ async function dictStart(btn,cfg){
     btn.style.background='#c0392b';
     log('🎙 Говори…'); vibrate(40);
   }catch(e){
-    log('⚠️ Микрофон для надиктовки недоступен: '+(e?.message||e));
-    alert('Микрофон не открылся для надиктовки. Набери задание текстом (можно вставить из Telegram) и жми ШАГ 2.');
+    log('⚠️ Микрофон для надиктовки: '+(e?.message||e));
+    flash('🎤 Запись не открылась — набери задание текстом и жми ШАГ 2');
     dictating=false; applyMic();
-    if(dictResume){ dictResume=false; if(!conv&&!connecting) doConnect(true); }
   }
 }
 
@@ -905,8 +906,6 @@ async function dictStop(btn,cfg){
 async function dictReset(btn,cfg){
   btn.textContent=cfg.label; btn.style.background='#b0431f'; rec=null;
   dictating=false;
-  // если ради надиктовки ставили паузу и её никто ещё не снял — возвращаем связь
-  if(dictResume){ dictResume=false; if(!conv&&!connecting) await doConnect(true); }
   if(micMode()==='open' && conv) micWanted=true;   // руки свободны — вернуть эфир
   applyMic();
 }
@@ -921,7 +920,8 @@ function wireDictation(btn,cfg){
 // поэтому гость не может подделать режиссёрскую команду. Промпт §7.8 знает этот токен.
 const REGIE='⟦REGIE⟧';
 function sendRegie(t){
-  if(!t||!conv) return;
+  if(!t) return;
+  if(!conv){ log('⚠️ ШАГ 2 нажат без связи'); flash('⚠️ Нет связи — жми ▶️ ПРОДОЛЖИТЬ, потом ШАГ 2 ещё раз'); return; }
   setWanted(false);                    // пока робот выдаёт монолог — микрофон закрыт
   try{
     expectReply();
