@@ -391,6 +391,11 @@ function setWanted(v){
 // промолчит в ответ. Уровень берём у самого SDK (getInputVolume): второй раз
 // открывать микрофон на iOS опасно — два захвата дерутся за один вход.
 let levelTimer=null, levelPeak=0, levelSilent=0, levelTick=0;
+let awaitingReply=false, awaitTimer=null;   // отправили задание/реплику — робот ДОЛЖЕН заговорить
+function expectReply(){
+  awaitingReply=true; clearTimeout(awaitTimer);
+  awaitTimer=setTimeout(()=>{ awaitingReply=false; }, 90000);  // страховка
+}
 function levelStart(){
   clearInterval(levelTimer);
   levelPeak=0; levelSilent=0;
@@ -403,7 +408,10 @@ function levelStart(){
     // («Seid ihr noch da?» посреди надиктовки, поймано 31.07).
     // В «руках свободных» с открытым микрофоном НЕ пингуем: там его попытки
     // разговорить молчуна — нужное поведение.
-    if(++levelTick>=80){ levelTick=0; if(!open){ try{ conv.sendUserActivity?.(); }catch{} } }
+    // НЕ пингуем, когда робот говорит или должен вот-вот заговорить:
+    // user_activity просит его помолчать — и глушил ответ на задание (31.07)
+    if(++levelTick>=80){ levelTick=0;
+      if(!open && !agentSpeaking && !boardPlaying && !awaitingReply){ try{ conv.sendUserActivity?.(); }catch{} } }
     if(!open){
       bar.style.width='0%'; bar.style.background='#444';
       txt.textContent = dictating ? 'надиктовка — робот не слышит' : (agentSpeaking||boardPlaying ? 'робот говорит' : 'микрофон закрыт');
@@ -450,6 +458,7 @@ async function refreshMicList(){
   const outs=all.filter(d=>d.kind==='audiooutput');
 
   const sel=$('micDevice'), keep=localStorage.getItem('micDeviceId')||'';
+  const keepLabel=localStorage.getItem('micDeviceLabel')||'';
   sel.innerHTML='<option value="">по умолчанию (что выберет телефон)</option>';
   ins.forEach((d,i)=>{
     const o=document.createElement('option');
@@ -457,6 +466,18 @@ async function refreshMicList(){
     sel.appendChild(o);
   });
   if(keep && ins.some(d=>d.deviceId===keep)) sel.value=keep;
+  else if(keepLabel){
+    // iOS выдаёт микрофонам НОВЫЕ номера при каждой загрузке страницы —
+    // сохранённый номер протухает, и выбор молча слетал на встроенный
+    // (поймано 31.07: «руки свободны, а он меня не слышит»). Имя стабильно.
+    const m=ins.find(d=>(d.label||'')===keepLabel);
+    if(m){
+      sel.value=m.deviceId; store('micDeviceId',m.deviceId);
+      log('🎙 Вернул твой микрофон: '+keepLabel);
+      if(conv) conv.changeInputDevice({inputDeviceId:m.deviceId})
+        .then(()=>log('🎙 Микрофон применён: '+keepLabel)).catch(()=>{});
+    }
+  }
 
   // Вывод звука: на Андроиде список живой, на айфоне система его не отдаёт.
   const canPickOutput = outs.length>0 && ('setSinkId' in HTMLMediaElement.prototype || IS_ANDROID);
@@ -495,6 +516,7 @@ $('outDevice').onchange=async()=>{
 };
 $('micDevice').onchange=async()=>{
   store('micDeviceId',$('micDevice').value);
+  store('micDeviceLabel', $('micDevice').value ? ($('micDevice').selectedOptions[0]?.textContent||'') : '');
   const name=$('micDevice').selectedOptions[0]?.textContent||'по умолчанию';
   if(!conv){ log('🎙 Микрофон выбран: '+name); return; }
   try{ await conv.changeInputDevice({inputDeviceId:micDeviceId()}); log('🎙 Микрофон переключён: '+name); }
@@ -662,6 +684,7 @@ async function doConnect(isReconnect){
       },
       onModeChange:({mode})=>{
         const speaking=mode==='speaking';
+        if(speaking) awaitingReply=false;   // ответ пошёл — пинг снова можно
         $('modeDot').classList.toggle('speak',speaking);
         $('modeText').textContent=speaking?'робот говорит':'тишина';
         clearTimeout(tailTimer);
@@ -822,7 +845,7 @@ $('sendCtx').onclick=()=>{
 };
 $('sayBtn').onclick=()=>{
   const t=$('sayInput').value.trim(); if(!t||!conv)return;
-  try{ conv.sendUserMessage(t); log('🗣 Реплика гостя: '+t); $('sayInput').value=''; }
+  try{ expectReply(); conv.sendUserMessage(t); log('🗣 Реплика гостя: '+t); $('sayInput').value=''; }
   catch(e){ log('⚠️ Реплика не ушла: '+(e?.message||e)); }
 };
 
@@ -896,6 +919,7 @@ function sendRegie(t){
   if(!t||!conv) return;
   setWanted(false);                    // пока робот выдаёт монолог — микрофон закрыт
   try{
+    expectReply();
     conv.sendUserMessage(REGIE+' '+t);
     pendingRegie=true;
     vibrate([40,40,40]);
@@ -942,7 +966,7 @@ wireDictation($('dirMic'), {
 wireDictation($('sayMic'), {
   label:'🎤 Надиктовать',
   done:t=>{ if(!conv) return;
-    try{ conv.sendUserMessage(t); log('🗣 За гостя: '+t); }catch(e){ log('⚠️ '+e); } }
+    try{ expectReply(); conv.sendUserMessage(t); log('🗣 За гостя: '+t); }catch(e){ log('⚠️ '+e); } }
 });
 
 // завершить — в два тапа (защита от случайного нажатия)
