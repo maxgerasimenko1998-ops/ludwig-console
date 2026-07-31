@@ -176,10 +176,18 @@
     </div>
 
     <div class="card">
+      <label>⚡ Быстрые действия — скажет сразу</label>
+      <div class="quick">
+        <button id="qaLouder">🔊 Громче, повтори</button>
+        <button id="qaFollow">📣 Подписка</button>
+        <button id="qaBye">👋 Завершить</button>
+      </div>
+    </div>
+
+    <div class="card">
       <label>🎬 РЕЖИССЁР — робот исполнит (аудитория не слышит)</label>
       <textarea id="dirInput" placeholder="напр. Wir stehen vor dem Roten Rathaus in Berlin. Du kandidierst als Bürgermeister. Halte eine lange Rede fürs Video: versprich, alle Straßen zu reparieren und Freibier für alle. Fordere die anderen Kandidaten zum Duell heraus. Beginne mit: „Mein Volk, Euer König hat entschieden!" Am Ende: folgt robotollern."></textarea>
-      <button id="dirMic" style="background:#b0431f">🎤 ШАГ 1 — надиктовать</button>
-      <button id="dirBtn" disabled>🎬 ШАГ 2 — НОВЫЙ МОНОЛОГ</button>
+      <button id="dirBtn" disabled>🎬 МОНОЛОГ</button>
       <button id="dlgBtn" disabled style="background:#7d5fc4">💬 НАЧАЛО ДИАЛОГА — короткий заход</button>
       <button id="contBtn" disabled style="background:#2d6a4f">➕ ПРОДОЛЖИТЬ последний монолог</button>
     </div>
@@ -647,6 +655,7 @@ function flash(m){ const b=$('reconnBanner'); b.textContent=m; b.classList.remov
 let connecting=false;
 async function doConnect(isReconnect){
   if(connecting){ log('… подключение уже идёт, повтор пропущен'); return; }
+  if(!sessionCfg){ log('⚠️ Нечего подключать: настроек сессии ещё нет'); return; }
   connecting=true; paused=false;
   if(conv){ try{ await conv.endSession(); }catch{} conv=null; }
   audioSessionSet('auto');   // захват начинаем в 'auto', пинок будет после
@@ -948,6 +957,7 @@ function refreshDirButtons(){
   $('contBtn').style.background=(has&&hadMonologue)?'#2d6a4f':'';
 }
 async function ensureConn(){
+  if(!sessionCfg){ flash('⚠️ Сначала нажми «Подключиться» на первом экране'); return false; }
   if(!conv && !connecting){ flash('▶️ Подключаю…'); await doConnect(true); }
   return !!conv;
 }
@@ -965,6 +975,17 @@ $('dlgBtn').onclick=async()=>{
   sendRegie(t+'\n\nWICHTIG: Diesmal KEIN langer Monolog. Eröffne die Szene mit ein bis drei Sätzen — ein Gesprächsauftakt, keine Rede. Dann halte inne und lass dein Gegenüber antworten. Danach normales Gespräch.');
   refreshDirButtons();
 };
+const INSTANT={
+  qaLouder:'Du hast den Gast akustisch nicht verstanden. Bitte ihn KURZ (1 Satz), königlich-charmant, lauter und deutlicher zu wiederholen.',
+  qaFollow:'Mache JETZT einen kurzen königlichen Aufruf (1-2 Sätze), dir zu folgen: robotollern. Danach normal weiter.',
+  qaBye:'Beende die Begegnung JETZT: warmer königlicher Abschied in 1-2 Sätzen, erwähne robotollern. Danach schweige und warte.',
+};
+for(const id in INSTANT){
+  $(id).onclick=async()=>{
+    if(!await ensureConn()) return;
+    sendRegie(INSTANT[id]);
+  };
+}
 $('contBtn').onclick=async()=>{
   const t=$('dirInput').value.trim(); if(!t) return;
   if(!await ensureConn()) return;
@@ -976,17 +997,9 @@ $('contBtn').onclick=async()=>{
   refreshDirButtons();
 };
 
-// Режиссёр в два шага: сначала надиктовал задание (робот молчит и ждёт),
-// потом отдельной кнопкой запускаешь сцену — когда подвёл робота к нужному месту.
-wireDictation($('dirMic'), {
-  label:'🎤 ШАГ 1 — надиктовать задание',
-  done:async t=>{
-    $('dirInput').value=t; refreshDirButtons();
-    if(!conv && !connecting){ log('▶️ Возвращаю связь и отдаю задание…'); await doConnect(true); }
-    if(conv){ sendRegie(t); hadMonologue=true; refreshDirButtons(); }
-    else log('⚠️ Связь не поднялась — задание в поле: жми ▶️ ПРОДОЛЖИТЬ, потом ШАГ 2');
-  }
-});
+// Голосовой ввод задания убран по решению Макса 31.07: на айфоне Chrome
+// не даёт открыть второй микрофон, а обходы ломали живую сессию. Текст в поле
+// попадает вставкой или клавиатурным 🎤 Apple — это надёжно.
 // Реплика за гостя — уходит сразу, тут важна скорость
 wireDictation($('sayMic'), {
   label:'🎤 Надиктовать',
