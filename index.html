@@ -377,6 +377,10 @@ function applyMic(){
   else ptt.innerHTML='🎤 ГОВОРИТЬ<br><small>микрофон выключен</small>';
 }
 function setWanted(v){
+  // Отпустили кнопку разговора = мы только что говорили и ЖДЁМ ответа.
+  // Без этого пинг «оператор здесь» просил сервер придержать реплику —
+  // и в режиме «Держи и говори» ответа не было вовсе (01.08).
+  if(!v && micWanted && conv) expectReply();
   micWanted=v; vibrate(v?40:20); applyMic();
   clearTimeout(toggleTimer);
   if(v && micMode()==='toggle'){
@@ -575,11 +579,14 @@ const micMode = () => $('micMode').value;
 // осталось два режима; сохранённый «toggle» со старых версий превращаем в hold
 $('micMode').value = (localStorage.getItem('micMode')==='open') ? 'open' : 'hold';
 $('micMode').onchange=()=>{
+  // Сессию НЕ трогаем: переключение режима на живом разговоре роняло связь
+  // (01.08). Просто меняем состояние микрофона.
   clearTimeout(toggleTimer);
   const m=micMode();
   store('micMode', m);
-  setWanted(m==='open');           // «всегда открыт» — сразу включаем
-  log(m==='open' ? '📢 Микрофон всегда открыт — руки свободны' : m==='toggle' ? '🔁 Режим нажал-вкл/нажал-выкл' : '🎤 Режим удержания кнопки');
+  micWanted = (m==='open') && !!conv;
+  vibrate(30); applyMic();
+  log(m==='open' ? '📢 Руки свободны — микрофон открыт' : '🎤 Держи и говори — жми большую кнопку');
 };
 
 // ---- ЗАТКНИСЬ: мгновенно глушим звук, сессию НЕ рвём ----
@@ -715,6 +722,7 @@ async function doConnect(isReconnect){
     iosKick();          // пинок маршрута — ТОЛЬКО после захвата, иначе 50/50
     levelStart();
     clearTimeout(reconnectTimer); reconnectTimer=null;   // висящий таймер добил бы живую сессию
+    try{ conv.setVolume({volume:1}); }catch{}   // страховка: СТОП глушил в ноль
     reconnectTries=0;   // связь восстановилась — счётчик попыток сбрасываем
     $('reconnBanner').textContent='🔄 Связь прервалась — переподключаюсь…';
     $('reconnBanner').classList.add('hidden');
@@ -845,6 +853,7 @@ window.addEventListener('blur',()=>{ if(isHold()&&micWanted) setWanted(false); }
 ptt.addEventListener('contextmenu',e=>e.preventDefault());
 
 $('sendCtx').onclick=()=>{
+  vibrate(45);
   const t=$('ctxInput').value.trim(); if(!t||!conv)return;
   try{
     conv.sendContextualUpdate(t);
@@ -964,6 +973,7 @@ async function ensureConn(){
 $('dirInput').addEventListener('input',refreshDirButtons);
 $('dirBtn').onclick=async()=>{
   const t=$('dirInput').value.trim(); if(!t) return;
+  vibrate([35,25,35]);
   if(!await ensureConn()) return;
   sendRegie(t); hadMonologue=true; refreshDirButtons();
 };
@@ -971,6 +981,7 @@ $('dirBtn').onclick=async()=>{
 // а открывает сцену парой фраз и ждёт ответа — дальше обычный разговор.
 $('dlgBtn').onclick=async()=>{
   const t=$('dirInput').value.trim(); if(!t) return;
+  vibrate([35,25,35]);
   if(!await ensureConn()) return;
   sendRegie(t+'\n\nWICHTIG: Diesmal KEIN langer Monolog. Eröffne die Szene mit ein bis drei Sätzen — ein Gesprächsauftakt, keine Rede. Dann halte inne und lass dein Gegenüber antworten. Danach normales Gespräch.');
   refreshDirButtons();
@@ -980,14 +991,25 @@ const INSTANT={
   qaFollow:'Mache JETZT einen kurzen königlichen Aufruf (1-2 Sätze), dir zu folgen: robotollern. Danach normal weiter.',
   qaBye:'Beende die Begegnung JETZT: warmer königlicher Abschied in 1-2 Sätzen, erwähne robotollern. Danach schweige und warte.',
 };
+let instantBusy=false;
 for(const id in INSTANT){
   $(id).onclick=async()=>{
-    if(!await ensureConn()) return;
-    sendRegie(INSTANT[id]);
+    if(instantBusy) return;
+    // Раньше кнопка молча ждала подключения и «не нажималась» — Макс давил
+    // по пять раз (01.08). Теперь палец получает отклик мгновенно.
+    instantBusy=true; vibrate([35,25,35]);
+    const b=$(id), was=b.textContent;
+    b.textContent='⏳ …'; b.disabled=true;
+    try{
+      if(await ensureConn()){ sendRegie(INSTANT[id]); vibrate(60); }
+    } finally {
+      b.textContent=was; b.disabled=false; instantBusy=false;
+    }
   };
 }
 $('contBtn').onclick=async()=>{
   const t=$('dirInput').value.trim(); if(!t) return;
+  vibrate([35,25,35]);
   if(!await ensureConn()) return;
   // «продолжить», а не «начать заново»: тему берёт из СВОЕГО последнего монолога,
   // разговор, случившийся между монологами, при этом не игнорируется
