@@ -77,7 +77,7 @@
   </div>
 
   <div class="card">
-    <label>⚡ Готовые фразы — играются мгновенно, не стоят ни копейки</label>
+    <label>⚡ Готовые фразы — мгновенно, бесплатно, по 5 вариантов на кнопку</label>
     <div class="klipy">
       <button data-k="chitayu">📖 Читаю чат</button>
       <button data-k="moment">⏳ Ещё момент</button>
@@ -128,10 +128,15 @@ $('dayCtx').value  = localStorage.getItem('streamCtx') || '';
 // ---- КЛИПЫ ----
 // Готовые mp3 в голосе Людвига. Играются мгновенно, агента не трогают,
 // не стоят ни токена. Нужны, чтобы у оператора было время читать и переводить.
+const VARIANTY=5;        // по пять вариантов на каждую кнопку
+const lastKlip={};       // что играли в прошлый раз — подряд не повторяем
 function playKlip(name){
   try{ if(clip){ clip.pause(); clip=null; } }catch{}
-  clip=new Audio('klipy/'+name+'.mp3');
-  clip.play().then(()=>log('▶️ клип: '+name))
+  let n;
+  do { n = 1 + Math.floor(Math.random()*VARIANTY); } while (n===lastKlip[name]);
+  lastKlip[name]=n;
+  clip=new Audio('klipy/'+name+n+'.mp3');
+  clip.play().then(()=>log('▶️ '+name+' — вариант '+n+' из '+VARIANTY))
              .catch(e=>log('⚠️ клип не сыграл: '+(e?.message||e)));
 }
 document.querySelectorAll('.klipy button').forEach(b=>{
