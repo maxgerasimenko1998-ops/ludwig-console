@@ -54,7 +54,8 @@
     <input id="apiKey" type="password" placeholder="sk_..." autocomplete="off">
     <p class="hint">Хранится только в этом браузере. Страницу с ключом никому не давай.</p>
     <label style="margin-top:10px">Контекст эфира (робот узнает это тихо, при подключении)</label>
-    <textarea id="dayCtx" placeholder="напр. Du hältst heute einen Livestream auf TikTok und Instagram. Es stehen keine Gäste vor dir — deine Zuschauer schreiben dir in den Kommentaren."></textarea>
+    <textarea id="dayCtx">Du hältst gerade einen Livestream auf TikTok und Instagram. Vor dir steht niemand — deine Zuschauer schreiben dir Kommentare, die du vorgelesen bekommst. Antworte jedem mit einer kleinen Rede von fünf bis sieben Sätzen.</textarea>
+    <p class="hint">Это уже вписано и работает — без этой строки робот отвечает коротко, как на улице. Меняй только если знаешь зачем.</p>
     <button id="connectBtn" style="width:100%;margin-top:12px;background:var(--green)">▶️ Подключиться</button>
   </div>
   <p class="hint">Пульт эфира: микрофон НЕ используется. Ты пишешь — робот говорит.</p>
@@ -77,7 +78,7 @@
   </div>
 
   <div class="card">
-    <label>⚡ Готовые фразы — мгновенно, бесплатно, по 5 вариантов на кнопку</label>
+    <label>⚡ Готовые фразы — мгновенно, бесплатно, по 5 вариантов, 10-20 секунд каждая</label>
     <div class="klipy">
       <button data-k="chitayu">📖 Читаю чат</button>
       <button data-k="moment">⏳ Ещё момент</button>
@@ -118,6 +119,10 @@ const store=(k,v)=>{ try{ localStorage.setItem(k,v); }catch{} };
 
 let conv=null, connecting=false, speaking=false, stopping=false;
 let keepTimer=null, clip=null, reconnectTimer=null, tries=0;
+// awaiting — мы только что отправили и ждём голос; tailDone — колонка домолчала
+let awaiting=false, tailDone=true, tailTimer=null, awaitTimer=null;
+function expectReply(){ awaiting=true; tailDone=false; clearTimeout(awaitTimer);
+  awaitTimer=setTimeout(()=>{ awaiting=false; tailDone=true; }, 60000); }
 
 // Agent ID можно передать ссылкой: stream.html?agent=agent_...
 const q=new URLSearchParams(location.search);
@@ -184,6 +189,15 @@ async function connect(isReconnect){
         $('statusTxt').textContent = speaking ? 'робот говорит' : 'в эфире';
         // клип и живая речь одновременно = каша; живая речь важнее
         if(speaking && clip){ try{ clip.pause(); }catch{} clip=null; }
+        clearTimeout(tailTimer);
+        if(speaking){ awaiting=false; }
+        else {
+          // ХВОСТ. Сервер говорит «я закончил» раньше, чем колонка домолчала.
+          // Если в эту щель уйдёт пинг «оператор здесь», он срубит последние
+          // слова — так у Макса «задавливался конец» (16.08).
+          tailTimer=setTimeout(()=>{ tailDone=true; }, 1500);
+          tailDone=false;
+        }
       },
       onMessage:({source,message})=>log((source==='ai'?'🤖 ':'🧑 ')+message),
       onDisconnect:()=>onDrop(),
@@ -212,7 +226,12 @@ async function connect(isReconnect){
     // решает, что гость молчит, и робот начинает говорить сам с собой — на
     // стриме это выглядит как поломка (проверено на выступлениях 2-4 августа).
     clearInterval(keepTimer);
-    keepTimer=setInterval(()=>{ if(conv && !speaking){ try{ conv.sendUserActivity?.(); }catch{} } },8000);
+    keepTimer=setInterval(()=>{
+      // НЕ пингуем, пока ждём ответ и пока не отзвучал хвост: user_activity
+      // просит сервер придержать реплику, и посланный не вовремя он срезает
+      // начало ответа или его конец. Тот же урок был на прогулочном пульте.
+      if(conv && !speaking && !awaiting && tailDone){ try{ conv.sendUserActivity?.(); }catch{} }
+    },8000);
   }catch(e){
     log('⚠️ не подключилось: '+(e?.message||e));
     flash('Не подключилось: '+String(e?.message||e).slice(0,90));
@@ -255,12 +274,12 @@ $('send').onclick=()=>{
   const t=$('msg').value.trim(); if(!t || !need()) return;
   const n=$('name').value.trim();
   const text = n ? (n+' schreibt: '+t) : ('Ein Zuschauer schreibt: '+t);
-  try{ conv.sendUserMessage(text); log('🧑 '+text); $('msg').value=''; $('msg').focus(); }
+  try{ expectReply(); conv.sendUserMessage(text); log('🧑 '+text); $('msg').value=''; $('msg').focus(); }
   catch(e){ log('⚠️ не ушло: '+(e?.message||e)); }
 };
 $('regie').onclick=()=>{
   const t=$('msg').value.trim(); if(!t || !need()) return;
-  try{ conv.sendUserMessage('⟦REGIE⟧ '+t); log('🎬 задание: '+t); $('msg').value=''; $('msg').focus(); }
+  try{ expectReply(); conv.sendUserMessage('⟦REGIE⟧ '+t); log('🎬 задание: '+t); $('msg').value=''; $('msg').focus(); }
   catch(e){ log('⚠️ не ушло: '+(e?.message||e)); }
 };
 $('sendCtx').onclick=()=>{
