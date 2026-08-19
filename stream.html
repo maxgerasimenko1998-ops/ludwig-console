@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Людвиг — прямой эфир</title>
+<link rel="icon" href="icon.png">
+<style>
+  :root{ --bg:#111; --card:#1c1c1c; --line:#333; --txt:#eee; --dim:#999;
+         --blue:#2d6ea8; --green:#2f7d32; --red:#8e2020; --gold:#a8862d; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:12px; background:var(--bg); color:var(--txt);
+        font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  h1{ font-size:19px; margin:0 0 10px; text-align:center; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:12px;
+         padding:12px; margin-bottom:12px; }
+  label{ display:block; font-size:13px; color:var(--dim); margin-bottom:5px; }
+  input,textarea,select{ width:100%; padding:11px; font-size:17px; color:var(--txt);
+        background:#000; border:1px solid var(--line); border-radius:9px; }
+  textarea{ min-height:78px; resize:vertical; }
+  button{ padding:13px 14px; font-size:16px; font-weight:600; color:#fff; background:var(--blue);
+        border:0; border-radius:10px; cursor:pointer; }
+  button:disabled{ opacity:.45; }
+  .row{ display:flex; gap:8px; }
+  .row>*{ flex:1; }
+  .klipy{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .klipy button{ background:#3a3a3a; font-weight:500; font-size:15px; padding:14px 8px; }
+  .klipy button.wide{ grid-column:1/-1; background:var(--gold); color:#111; }
+  #log{ height:150px; overflow:auto; background:#000; border:1px solid var(--line);
+        border-radius:9px; padding:9px; font:12px/1.5 ui-monospace,Menlo,monospace;
+        white-space:pre-wrap; color:#bbb; }
+  .hint{ font-size:12px; color:var(--dim); margin:6px 0 0; }
+  .dot{ width:10px; height:10px; border-radius:50%; background:#555; display:inline-block; }
+  .dot.on{ background:#3a8f3a; } .dot.speak{ background:var(--gold); }
+  #status{ display:flex; align-items:center; gap:8px; justify-content:center;
+        font-size:14px; color:var(--dim); margin-bottom:10px; }
+  #banner{ background:var(--gold); color:#111; padding:10px; border-radius:9px;
+        margin-bottom:10px; font-weight:600; }
+  .hidden{ display:none !important; }
+  .mic-off{ background:#241; border:1px solid #385; color:#9d9; padding:8px 10px;
+        border-radius:9px; font-size:13px; text-align:center; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<h1>🎬 Людвиг — прямой эфир</h1>
+<div id="banner" class="hidden"></div>
+
+<!-- НАСТРОЙКА -->
+<div id="setup">
+  <div class="card">
+    <label>Agent ID</label>
+    <input id="agentId" placeholder="agent_..." autocomplete="off">
+    <label style="margin-top:10px">Ключ ElevenLabs (нужен для пропуска)</label>
+    <input id="apiKey" type="password" placeholder="sk_..." autocomplete="off">
+    <p class="hint">Хранится только в этом браузере. Страницу с ключом никому не давай.</p>
+    <label style="margin-top:10px">Контекст эфира (робот узнает это тихо, при подключении)</label>
+    <textarea id="dayCtx" placeholder="напр. Du hältst heute einen Livestream auf TikTok und Instagram. Es stehen keine Gäste vor dir — deine Zuschauer schreiben dir in den Kommentaren."></textarea>
+    <button id="connectBtn" style="width:100%;margin-top:12px;background:var(--green)">▶️ Подключиться</button>
+  </div>
+  <p class="hint">Пульт эфира: микрофон НЕ используется. Ты пишешь — робот говорит.</p>
+</div>
+
+<!-- РАБОТА -->
+<div id="live" class="hidden">
+  <div id="status"><span id="dot" class="dot"></span><span id="statusTxt">не подключено</span></div>
+  <div class="mic-off">🎤 Микрофон выключен и не включится — робот тебя не слышит</div>
+
+  <div class="card">
+    <label>💬 Комментарий зрителя</label>
+    <input id="name" placeholder="имя автора (останется до следующей смены)" autocomplete="off">
+    <textarea id="msg" style="margin-top:8px" placeholder="текст комментария — можно по-русски"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="send" style="background:var(--green)">💬 Ответить</button>
+      <button id="regie" style="background:var(--blue)">🎬 Задание</button>
+    </div>
+    <p class="hint">«Ответить» — робот отвечает автору по имени. «Задание» — команда режиссёра: монолог, смена темы, прощание.</p>
+  </div>
+
+  <div class="card">
+    <label>⚡ Готовые фразы — играются мгновенно, не стоят ни копейки</label>
+    <div class="klipy">
+      <button data-k="chitayu">📖 Читаю чат</button>
+      <button data-k="moment">⏳ Ещё момент</button>
+      <button data-k="hm">🤔 Хм, вопрос</button>
+      <button data-k="eshe">✍️ Пишите ещё</button>
+      <button data-k="privet">👑 Приветствие</button>
+      <button data-k="proshanie">👋 Прощание</button>
+      <button data-k="podpiska" class="wide">📣 Подписывайтесь</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label>🤫 Тихая подсказка (робот учтёт, но вслух не ответит)</label>
+    <textarea id="ctx" placeholder="напр. в чате много детей / сейчас говорим про еду"></textarea>
+    <button id="sendCtx" style="width:100%;margin-top:8px;background:#555">📩 Отправить подсказку</button>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="stopBtn" style="background:var(--red)">⏹ Завершить эфир</button>
+      <button id="reconnBtn" style="background:#555">🔄 Переподключить</button>
+    </div>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<script type="module">
+// Версия прибита намеренно — см. index.html, тот же довод.
+import { Conversation } from 'https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.18.0/+esm';
+
+const $ = id => document.getElementById(id);
+const log = t => { const e=$('log'); e.textContent += t+'\n'; e.scrollTop=e.scrollHeight; };
+// Никаких alert(): Chrome умеет глушить их навсегда, и пульт молча ломается.
+function flash(m){ const b=$('banner'); b.textContent=m; b.classList.remove('hidden');
+  clearTimeout(flash._t); flash._t=setTimeout(()=>b.classList.add('hidden'), 7000); }
+const store=(k,v)=>{ try{ localStorage.setItem(k,v); }catch{} };
+
+let conv=null, connecting=false, speaking=false, stopping=false;
+let keepTimer=null, clip=null, reconnectTimer=null, tries=0;
+
+// Agent ID можно передать ссылкой: stream.html?agent=agent_...
+const q=new URLSearchParams(location.search);
+$('agentId').value = q.get('agent') || localStorage.getItem('agentId') || '';
+$('apiKey').value  = localStorage.getItem('xiKey') || '';
+$('dayCtx').value  = localStorage.getItem('streamCtx') || '';
+
+// ---- КЛИПЫ ----
+// Готовые mp3 в голосе Людвига. Играются мгновенно, агента не трогают,
+// не стоят ни токена. Нужны, чтобы у оператора было время читать и переводить.
+function playKlip(name){
+  try{ if(clip){ clip.pause(); clip=null; } }catch{}
+  clip=new Audio('klipy/'+name+'.mp3');
+  clip.play().then(()=>log('▶️ клип: '+name))
+             .catch(e=>log('⚠️ клип не сыграл: '+(e?.message||e)));
+}
+document.querySelectorAll('.klipy button').forEach(b=>{
+  b.onclick=()=>{ navigator.vibrate?.(35); playKlip(b.dataset.k); };
+});
+
+// ---- ПОДКЛЮЧЕНИЕ ----
+async function pass(agentId){
+  const key=$('apiKey').value.trim();
+  if(!key) return null;
+  const url='https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id='+encodeURIComponent(agentId);
+  try{
+    const r=await fetch(url,{headers:{'xi-api-key':key}});
+    if(!r.ok){ log('⚠️ пропуск не выдан ('+r.status+') — пробую по Agent ID'); return null; }
+    log('🔑 пропуск получен');
+    return {signedUrl:(await r.json()).signed_url};
+  }catch(e){ log('⚠️ пропуск не запросился: '+(e?.message||e)); return null; }
+}
+
+async function connect(isReconnect){
+  if(connecting) return;
+  const agentId=$('agentId').value.trim();
+  if(!agentId){ flash('Впиши Agent ID'); return; }
+  connecting=true; stopping=false;
+  store('agentId',agentId); store('xiKey',$('apiKey').value.trim());
+  store('streamCtx',$('dayCtx').value.trim());
+  $('statusTxt').textContent='подключаюсь…';
+  if(conv){ try{ await conv.endSession(); }catch{} conv=null; }
+  try{
+    const p=await pass(agentId);
+    let late=false;
+    // Зависший (не упавший) запрос иначе оставил бы пульт в «подключаюсь» навсегда.
+    const starting=Conversation.startSession({
+      ...(p || {agentId}),
+      connectionType:'websocket',
+      onStatusChange:({status})=>{
+        const on=status==='connected';
+        $('dot').classList.toggle('on',on);
+        $('statusTxt').textContent = on ? 'в эфире' : status;
+        if(status==='disconnected') onDrop();
+      },
+      onModeChange:({mode})=>{
+        speaking = mode==='speaking';
+        $('dot').classList.toggle('speak',speaking);
+        $('statusTxt').textContent = speaking ? 'робот говорит' : 'в эфире';
+        // клип и живая речь одновременно = каша; живая речь важнее
+        if(speaking && clip){ try{ clip.pause(); }catch{} clip=null; }
+      },
+      onMessage:({source,message})=>log((source==='ai'?'🤖 ':'🧑 ')+message),
+      onDisconnect:()=>onDrop(),
+      onError:e=>log('⚠️ '+(e?.message||e)),
+    });
+    starting.then(s=>{ if(late){ try{ s.endSession(); }catch{} } }).catch(()=>{});
+    conv=await Promise.race([ starting, new Promise((_,rej)=>setTimeout(()=>{
+      late=true; rej(new Error('сервер не ответил за 15 секунд'));
+    },15000)) ]);
+
+    // МИКРОФОН ГЛУШИМ НАВСЕГДА. Разрешение браузер всё равно просит (библиотека
+    // без него сессию не открывает), но в эфир не уходит ни звука: на стриме
+    // собеседников нет, есть только то, что печатает оператор.
+    try{ conv.setMicMuted(true); }catch{}
+    try{ conv.setVolume({volume:1}); }catch{}
+
+    $('setup').classList.add('hidden'); $('live').classList.remove('hidden');
+    tries=0; clearTimeout(reconnectTimer); reconnectTimer=null;
+    log(isReconnect?'🔄 переподключено':'✅ подключено, микрофон заглушен');
+
+    const ctx=$('dayCtx').value.trim();
+    if(ctx) conv.sendContextualUpdate('Du befindest dich gerade in folgender Lage: '+ctx
+      + ' — das ist deine eigene Wahrnehmung der Szene, keine Nachricht an dich.');
+
+    // «Оператор здесь» раз в 8 секунд. Без этого сервер через 20 секунд тишины
+    // решает, что гость молчит, и робот начинает говорить сам с собой — на
+    // стриме это выглядит как поломка (проверено на выступлениях 2-4 августа).
+    clearInterval(keepTimer);
+    keepTimer=setInterval(()=>{ if(conv && !speaking){ try{ conv.sendUserActivity?.(); }catch{} } },8000);
+  }catch(e){
+    log('⚠️ не подключилось: '+(e?.message||e));
+    flash('Не подключилось: '+String(e?.message||e).slice(0,90));
+    $('statusTxt').textContent='нет связи';
+    if(!stopping) scheduleReconnect();
+  } finally { connecting=false; }
+}
+
+function onDrop(){
+  if(connecting || stopping){ conv=null; return; }
+  clearInterval(keepTimer);
+  const dead=conv; conv=null; speaking=false;
+  if(dead){ try{ dead.endSession(); }catch{} }
+  $('dot').classList.remove('on','speak');
+  $('statusTxt').textContent='связь оборвалась';
+  log('⚠️ связь оборвалась');
+  scheduleReconnect();
+}
+function scheduleReconnect(){
+  if(reconnectTimer || stopping) return;
+  if(tries>=6){ flash('🛑 Связи нет — жми «Переподключить»'); log('🛑 6 попыток подряд без успеха'); return; }
+  const wait=Math.min(2000*Math.pow(1.7,tries), 30000);
+  tries++;
+  log('… попытка переподключения через '+Math.round(wait/1000)+' сек');
+  reconnectTimer=setTimeout(()=>{ reconnectTimer=null; connect(true); }, wait);
+}
+window.addEventListener('online', ()=>{
+  log('📶 интернет вернулся');
+  if(!conv && !connecting && !stopping){ clearTimeout(reconnectTimer); reconnectTimer=null; tries=0; connect(true); }
+});
+window.addEventListener('offline', ()=>log('📵 интернет пропал'));
+
+$('connectBtn').onclick=()=>connect(false);
+$('reconnBtn').onclick=()=>{ tries=0; clearTimeout(reconnectTimer); reconnectTimer=null; connect(true); };
+
+// ---- ОТПРАВКА ----
+function need(){ if(!conv){ flash('Нет связи — жми «Переподключить»'); return false; } return true; }
+
+$('send').onclick=()=>{
+  const t=$('msg').value.trim(); if(!t || !need()) return;
+  const n=$('name').value.trim();
+  const text = n ? (n+' schreibt: '+t) : ('Ein Zuschauer schreibt: '+t);
+  try{ conv.sendUserMessage(text); log('🧑 '+text); $('msg').value=''; $('msg').focus(); }
+  catch(e){ log('⚠️ не ушло: '+(e?.message||e)); }
+};
+$('regie').onclick=()=>{
+  const t=$('msg').value.trim(); if(!t || !need()) return;
+  try{ conv.sendUserMessage('⟦REGIE⟧ '+t); log('🎬 задание: '+t); $('msg').value=''; $('msg').focus(); }
+  catch(e){ log('⚠️ не ушло: '+(e?.message||e)); }
+};
+$('sendCtx').onclick=()=>{
+  const t=$('ctx').value.trim(); if(!t || !need()) return;
+  try{ conv.sendContextualUpdate(t); log('📩 подсказка: '+t); $('ctx').value=''; }
+  catch(e){ log('⚠️ не ушло: '+(e?.message||e)); }
+};
+// Enter отправляет, Shift+Enter — перенос строки: на стриме каждая секунда видна
+$('msg').addEventListener('keydown',e=>{
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); $('send').click(); }
+});
+
+$('stopBtn').onclick=async()=>{
+  stopping=true; clearInterval(keepTimer); clearTimeout(reconnectTimer); reconnectTimer=null;
+  try{ conv?.setVolume({volume:0}); }catch{}
+  try{ await conv?.endSession(); }catch{}
+  conv=null; speaking=false;
+  $('dot').classList.remove('on','speak'); $('statusTxt').textContent='эфир завершён';
+  $('live').classList.add('hidden'); $('setup').classList.remove('hidden');
+  log('⏹ эфир завершён');
+};
+
+// Экран не гасим: сессия на фоне рвётся
+let wl=null;
+async function awake(){ try{ wl=await navigator.wakeLock?.request('screen');
+  wl?.addEventListener?.('release',()=>{ wl=null; }); }catch{} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') awake(); });
+awake();
+log('Пульт эфира готов. Микрофон не используется.');
+</script>
+</body>
+</html>
