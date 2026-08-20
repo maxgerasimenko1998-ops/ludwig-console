@@ -98,6 +98,7 @@
 
   <div class="card">
     <div class="row">
+      <button id="mute" style="background:#8e6b20">🔇 ЗАГЛУШИТЬ</button>
       <button id="stopBtn" style="background:var(--red)">⏹ Завершить эфир</button>
       <button id="reconnBtn" style="background:#555">🔄 Переподключить</button>
     </div>
@@ -145,7 +146,12 @@ function playKlip(name){
              .catch(e=>log('⚠️ клип не сыграл: '+(e?.message||e)));
 }
 document.querySelectorAll('.klipy button').forEach(b=>{
-  b.onclick=()=>{ navigator.vibrate?.(35); playKlip(b.dataset.k); };
+  b.onclick=()=>{
+    // Пока робот говорит, клип не пускаем: на эфире 20.08 они звучали хором.
+    // Нужна тишина немедленно — рядом кнопка «ЗАГЛУШИТЬ».
+    if(speaking){ flash('🤖 Робот сейчас говорит — клип не пущу. Нужна тишина: жми ЗАГЛУШИТЬ'); return; }
+    navigator.vibrate?.(35); playKlip(b.dataset.k);
+  };
 });
 
 // ---- ПОДКЛЮЧЕНИЕ ----
@@ -217,7 +223,7 @@ async function connect(isReconnect){
     // без него сессию не открывает), но в эфир не уходит ни звука: на стриме
     // собеседников нет, есть только то, что печатает оператор.
     try{ conv.setMicMuted(true); }catch{}
-    try{ conv.setVolume({volume:1}); }catch{}
+    try{ conv.setVolume({volume: muted?0:1}); }catch{}
 
     $('setup').classList.add('hidden'); $('live').classList.remove('hidden');
     tries=0; clearTimeout(reconnectTimer); reconnectTimer=null;
@@ -298,6 +304,21 @@ $('sendCtx').onclick=()=>{
 $('msg').addEventListener('keydown',e=>{
   if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); $('send').click(); }
 });
+
+// 🔇 ЗАГЛУШИТЬ — мгновенная тишина: обрывает и клип, и живую речь робота.
+// На эфире 20.08 записанная фраза и ответ робота несколько раз пошли
+// одновременно, а заткнуть их было нечем. Сессия при этом живёт.
+let muted=false;
+function setMute(v){
+  muted=v; navigator.vibrate?.(v?[70,40,70]:40);
+  try{ conv?.setVolume({volume: v?0:1}); }catch{}
+  if(v && clip){ try{ clip.pause(); }catch{} clip=null; }
+  const b=$('mute');
+  b.textContent = v ? '🔊 ВЕРНУТЬ ЗВУК' : '🔇 ЗАГЛУШИТЬ';
+  b.style.background = v ? '#c8a020' : '#8e6b20';
+  log(v?'🔇 тишина — говорят оба, но их не слышно':'🔊 звук вернулся');
+}
+$('mute').onclick=()=>setMute(!muted);
 
 $('stopBtn').onclick=async()=>{
   stopping=true; clearInterval(keepTimer); clearTimeout(reconnectTimer); reconnectTimer=null;
