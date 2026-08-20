@@ -177,6 +177,11 @@ async function connect(isReconnect){
     const starting=Conversation.startSession({
       ...(p || {agentId}),
       connectionType:'websocket',
+      // 19.08 эфир прошёл БЕЗ режима стрима: контекст уходил заметкой уже после
+      // подключения, и промпт не считал его «постоянным фоном дня» — робот
+      // отвечал по-уличному коротко. Теперь он уходит переменной прямо в старте,
+      // то есть попадает в сам промпт (§7.10 включается именно от него).
+      dynamicVariables:{ day_context: $('dayCtx').value.trim() },
       onStatusChange:({status})=>{
         const on=status==='connected';
         $('dot').classList.toggle('on',on);
@@ -273,7 +278,9 @@ function need(){ if(!conv){ flash('Нет связи — жми «Перепод
 $('send').onclick=()=>{
   const t=$('msg').value.trim(); if(!t || !need()) return;
   const n=$('name').value.trim();
-  const text = n ? (n+' schreibt: '+t) : ('Ein Zuschauer schreibt: '+t);
+  // Без имени НЕ подставляем «Ein Zuschauer»: 19.08 из-за этого робот шесть раз
+  // подряд обращался «werter Zuschauer» — безлико и одинаково.
+  const text = n ? (n+' schreibt: '+t) : t;
   try{ expectReply(); conv.sendUserMessage(text); log('🧑 '+text); $('msg').value=''; $('msg').focus(); }
   catch(e){ log('⚠️ не ушло: '+(e?.message||e)); }
 };
