@@ -129,7 +129,11 @@ function expectReply(){ awaiting=true; tailDone=false; clearTimeout(awaitTimer);
 const q=new URLSearchParams(location.search);
 $('agentId').value = q.get('agent') || localStorage.getItem('agentId') || '';
 $('apiKey').value  = localStorage.getItem('xiKey') || '';
-$('dayCtx').value  = localStorage.getItem('streamCtx') || '';
+// Запасной текст берём из самой страницы: на новом телефоне или после чистки
+// браузера памяти нет, и раньше окно контекста оказывалось ПУСТЫМ — робот тогда
+// отвечает коротко, как на улице. Теперь в этом случае возвращается заводской текст.
+const ctxPoUmolchaniyu = $('dayCtx').value;
+$('dayCtx').value  = localStorage.getItem('streamCtx') || ctxPoUmolchaniyu;
 
 // ---- КЛИПЫ ----
 // Готовые mp3 в голосе Людвига. Играются мгновенно, агента не трогают,
