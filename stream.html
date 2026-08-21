@@ -141,7 +141,9 @@ function playKlip(name){
   let n;
   do { n = 1 + Math.floor(Math.random()*VARIANTY); } while (n===lastKlip[name]);
   lastKlip[name]=n;
-  clip=new Audio('klipy/'+name+n+'.mp3');
+  // ?v= — метка выпуска. Файлы клипов называются одинаково, поэтому браузер
+  // и GitHub держат старую запись в кэше. Меняем метку — телефон качает заново.
+  clip=new Audio('klipy/'+name+n+'.mp3?v=21082026');
   clip.play().then(()=>log('▶️ '+name+' — вариант '+n+' из '+VARIANTY))
              .catch(e=>log('⚠️ клип не сыграл: '+(e?.message||e)));
 }
