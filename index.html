@@ -827,6 +827,12 @@ async function doConnect(isReconnect){
       log('🎤 Микрофон отобран браузером; жду нажатия ПРОДОЛЖИТЬ');
       return;
     }
+    // Пароль: без ключа переподключение будет падать бесконечно.
+    if(/authoriz|signed link|unauthorized|401/i.test(msg)){
+      clearTimeout(reconnectTimer); reconnectTimer=null; reconnectTries=0;
+      flash('🔑 Робот требует пропуск: впиши ключ ElevenLabs (sk_…) на первом экране');
+      log('🔑 Отказ по паролю — нужен ключ sk_…'); showSetup(); return;
+    }
     if(!userStopping){ scheduleReconnect(); }
     else { flash('⚠️ Не удалось подключиться: '+msg.slice(0,90)); showSetup(); }
   }
@@ -882,6 +888,11 @@ function scheduleReconnect(){
 $('connectBtn').onclick=async()=>{
   const agentId=$('agentId').value.trim();
   if(!agentId){ flash('⚠️ Вставь Agent ID'); return; }
+  // 21.08.2026 агенту включили пароль: без ключа сервер отказывает наглухо.
+  if(!$('apiKey').value.trim()){
+    flash('🔑 Впиши ключ ElevenLabs (sk_…) — у робота включён пароль, без ключа он не пустит');
+    $('apiKey').focus(); return;
+  }
   store('ludwigAgentId',agentId);
   store('xiKey',$('apiKey').value.trim());
   const p=personas[$('personaSel').value]||{};

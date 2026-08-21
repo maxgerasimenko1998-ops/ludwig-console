@@ -177,6 +177,12 @@ async function connect(isReconnect){
   if(connecting) return;
   const agentId=$('agentId').value.trim();
   if(!agentId){ flash('Впиши Agent ID'); return; }
+  // 21.08.2026 агенту включили пароль. Без ключа сервер не пускает ВООБЩЕ,
+  // а раньше пульт молча пробовал по Agent ID и падал английской ошибкой.
+  if(!$('apiKey').value.trim()){
+    flash('🔑 Впиши ключ ElevenLabs (sk_…) — у робота включён пароль, без ключа он не пустит');
+    $('apiKey').focus(); return;
+  }
   connecting=true; stopping=false;
   store('agentId',agentId); store('xiKey',$('apiKey').value.trim());
   store('streamCtx',$('dayCtx').value.trim());
@@ -251,9 +257,15 @@ async function connect(isReconnect){
     },8000);
   }catch(e){
     log('⚠️ не подключилось: '+(e?.message||e));
-    flash('Не подключилось: '+String(e?.message||e).slice(0,90));
+    const msg=String(e?.message||e);
+    // Пароль: переподключаться бессмысленно, пока не вписан ключ.
+    const nuzhenKlyuch=/authoriz|signed link|unauthorized|401/i.test(msg);
+    flash(nuzhenKlyuch
+      ? '🔑 Робот требует пропуск: впиши ключ ElevenLabs (sk_…) в поле выше и жми «Подключиться»'
+      : 'Не подключилось: '+msg.slice(0,90));
     $('statusTxt').textContent='нет связи';
-    if(!stopping) scheduleReconnect();
+    if(nuzhenKlyuch){ clearTimeout(reconnectTimer); reconnectTimer=null; tries=0; }
+    else if(!stopping) scheduleReconnect();
   } finally { connecting=false; }
 }
 
