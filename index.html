@@ -888,11 +888,7 @@ function scheduleReconnect(){
 $('connectBtn').onclick=async()=>{
   const agentId=$('agentId').value.trim();
   if(!agentId){ flash('⚠️ Вставь Agent ID'); return; }
-  // 21.08.2026 агенту включили пароль: без ключа сервер отказывает наглухо.
-  if(!$('apiKey').value.trim()){
-    flash('🔑 Впиши ключ ElevenLabs (sk_…) — у робота включён пароль, без ключа он не пустит');
-    $('apiKey').focus(); return;
-  }
+  // Пароль у агента ВЫКЛЮЧЕН (21.08.2026, вечер) — без ключа тоже пускает.
   store('ludwigAgentId',agentId);
   store('xiKey',$('apiKey').value.trim());
   const p=personas[$('personaSel').value]||{};

@@ -177,12 +177,8 @@ async function connect(isReconnect){
   if(connecting) return;
   const agentId=$('agentId').value.trim();
   if(!agentId){ flash('Впиши Agent ID'); return; }
-  // 21.08.2026 агенту включили пароль. Без ключа сервер не пускает ВООБЩЕ,
-  // а раньше пульт молча пробовал по Agent ID и падал английской ошибкой.
-  if(!$('apiKey').value.trim()){
-    flash('🔑 Впиши ключ ElevenLabs (sk_…) — у робота включён пароль, без ключа он не пустит');
-    $('apiKey').focus(); return;
-  }
+  // Пароль у агента ВЫКЛЮЧЕН (21.08.2026, вечер) — без ключа тоже пускает.
+  // Не блокируем старт: ключ нужен только если пароль включат обратно.
   connecting=true; stopping=false;
   store('agentId',agentId); store('xiKey',$('apiKey').value.trim());
   store('streamCtx',$('dayCtx').value.trim());
