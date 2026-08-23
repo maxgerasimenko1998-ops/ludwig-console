@@ -317,9 +317,8 @@ const QUICK=[
   ['👋 Гость подошёл','Ein neuer Gast steht vor dir. Begrüße ihn kurz und charmant, stell dich mit Namen und Titel vor.'],
   ['📸 Фото','Jemand macht ein Foto mit dir. Posiere königlich und sag einen coolen Spruch.'],
   ['🏛 Памятник','Du stehst vor einem Denkmal. Beschreibe es theatralisch und staune.'],
-  ['🎁 Реклама','Erwähne beiläufig und charmant das Produkt des Kunden.'],
   ['🏁 Заверши диалог','Beende dieses Gespräch jetzt: verabschiede dich warm und königlich — dein Volk ruft, du musst weiter. Erwähne robotollern.'],
-  ['🗣 Дословно','SAG WÖRTLICH: "___" — (впиши точную фразу вместо ___; можно добавить обстоятельства и тон)'],
+  ['🗣 Дословно','Sage den folgenden Satz WÖRTLICH und unverändert, Wort für Wort, ohne ihn umzuformulieren: "___" — (впиши точную фразу вместо ___; можно добавить обстоятельства и тон)'],
 ];
 QUICK.forEach(([label,text])=>{ const b=document.createElement('button'); b.textContent=label; b.onclick=()=>{ $('ctxInput').value=text; }; $('quickCtx').appendChild(b); });
 
