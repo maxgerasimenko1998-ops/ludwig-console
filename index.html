@@ -129,11 +129,12 @@
   <!-- ЭКРАН РАБОТЫ -->
   <div id="live" class="hidden" style="display:none;flex-direction:column;gap:12px">
     <button id="ptt">🎤 ГОВОРИТЬ<br><small>микрофон выключен</small></button>
-    <button id="answerNow" style="background:#1e6f8f;height:64px">⏭ ХВАТИТ — ОТВЕЧАЙ<br><small>закрыть реплику и заставить ответить сразу</small></button>
+    <button id="answerNow" class="hidden" style="display:none"></button>
+    <button id="stopTalk" style="background:#8e2020;height:64px">✋ ХВАТИТ<br><small>замолчать и не слушать · держать 2 сек — оборвать связь</small></button>
     <div class="card">
       <label>Режим микрофона</label>
       <select id="micMode">
-        <option value="hold">🎤 Держать кнопку — надёжнее всего в шумной толпе</option>
+        <option value="toggle">🎤 Нажал — слушает, нажал ещё раз — отвечает</option>
         <option value="open">📢 РУКИ СВОБОДНЫ — микрофон всегда открыт (как у поляков)</option>
       </select>
       <div id="levelRow" style="display:flex;align-items:center;gap:8px;margin-top:6px">
@@ -173,13 +174,14 @@
           </details>
         </div>
       </details>
-      <button id="quietBtn" style="margin-top:8px;background:#5a4a1e;height:60px">🤫 ТИХО — не заговаривать<br><small>сессия жива, робот молчит и не слушает</small></button>
-      <button id="hushBtn" style="margin-top:8px;background:#8e2020;height:60px">⏹ СТОП — замолчать</button>
+      <button id="quietBtn" class="hidden" style="display:none"></button>
+      <button id="hushBtn" class="hidden" style="display:none"></button>
     </div>
 
     <div class="card">
       <label>⚡ Быстрые действия — скажет сразу</label>
       <div class="quick">
+        <button id="qaHello">👑 Приветствие</button>
         <button id="qaLouder">🔊 Громче, повтори</button>
         <button id="qaFollow">📣 Подписка</button>
         <button id="qaBye">👋 Завершить</button>
@@ -204,7 +206,7 @@
       <button id="contBtn" disabled style="background:#2d6a4f">➕ ПРОДОЛЖИТЬ последний монолог</button>
     </div>
 
-    <div class="card">
+    <div class="card hidden" style="display:none">
       <label>🔊 Точные фразы — слово-в-слово</label>
       <div class="board" id="board"></div>
       <details>
@@ -221,14 +223,14 @@
       <label>📩 Скрытый контекст — учтёт в следующем ответе</label>
       <textarea id="ctxInput" placeholder="напр. Du stehst vor einem Engeldenkmal. Beschreibe es, sei begeistert."></textarea>
       <button id="sendCtx">📩 Отправить контекст</button>
-      <div class="quick" id="quickCtx"></div>
+      <div class="quick hidden" id="quickCtx" style="display:none"></div>
     </div>
 
     <div class="card">
       <label>🗣 Сказать ЗА гостя</label>
       <textarea id="sayInput" placeholder="напр. Wo hast du dein rotes T-Shirt gekauft? · для стрима: Marius schreibt: ..."></textarea>
       <div class="row">
-        <button id="sayMic" style="background:#b0431f">🎤 Надиктовать</button>
+        <button id="sayMic" class="hidden" style="display:none"></button>
         <button id="sayBtn">🗣 Отправить</button>
       </div>
     </div>
@@ -237,7 +239,7 @@
       <button id="stopBtn">⏹ Завершить</button>
     </div>
 
-    <div class="card">
+    <div class="card hidden" style="display:none">
       <label>Журнал</label>
       <div id="lockScreen" class="hidden" style="position:fixed;inset:0;z-index:9999;
   background:#000d;display:flex;align-items:center;justify-content:center;flex-direction:column;
@@ -607,7 +609,7 @@ $('micRetry').onclick=()=>reacquireMic('вручную');
 // ---- режим микрофона ----
 const micMode = () => $('micMode').value;
 // осталось два режима; сохранённый «toggle» со старых версий превращаем в hold
-$('micMode').value = (localStorage.getItem('micMode')==='open') ? 'open' : 'hold';
+$('micMode').value = (localStorage.getItem('micMode')==='open') ? 'open' : 'toggle';
 $('micMode').onchange=()=>{
   // Сессию НЕ трогаем: переключение режима на живом разговоре роняло связь
   // (01.08). Просто меняем состояние микрофона.
@@ -657,6 +659,28 @@ async function resume(){
 }
 function unhush(){ hushed=false; }
 $('hushBtn').onclick=hush;
+
+// ✋ ХВАТИТ — одна кнопка вместо «тихо» и «стоп».
+// Коротко: мгновенная тишина в колонке, вход закрыт, сессия ЖИВА — пинги
+// «оператор здесь» не дают роботу заговорить самому. Продолжить — «ГОВОРИТЬ».
+// Держать 2 секунды: полный обрыв связи, как раньше делал СТОП.
+(function(){
+  const b=$('stopTalk'); if(!b) return;
+  let t=null, dolgo=false;
+  function korotko(){
+    if(!conv) return;
+    try{ conv.setVolume({volume:0}); }catch{}
+    setWanted(false);
+    if(!quiet) setQuiet(true);
+    vibrate([60,40,60]);
+    log('✋ Хватит — молчит и не слушает. Продолжить — «ГОВОРИТЬ»');
+    setTimeout(()=>{ try{ conv?.setVolume({volume:1}); }catch{} }, 1500);
+  }
+  b.addEventListener('pointerdown', e=>{ e.preventDefault(); dolgo=false;
+    t=setTimeout(()=>{ dolgo=true; vibrate([90,60,90]); hush(); }, 2000); });
+  b.addEventListener('pointerup', ()=>{ if(t){ clearTimeout(t); t=null; } if(!dolgo) korotko(); dolgo=false; });
+  b.addEventListener('pointercancel', ()=>{ if(t){ clearTimeout(t); t=null; } dolgo=false; });
+})();
 
 async function keepAwake(){
   try{
@@ -931,14 +955,22 @@ $('connectBtn').onclick=async()=>{
 
 // ---- push-to-talk ----
 const ptt=$('ptt');
-const isHold=()=>micMode()==='hold';
+const isHold=()=>false;                    // режима «держать» больше нет
+const isToggle=()=>micMode()==='toggle';   // нажал — слушает, нажал ещё раз — отвечает
 ptt.addEventListener('pointerdown',e=>{
   e.preventDefault();
   // без захвата указателя палец, соскользнувший с кнопки в толпе,
   // не доставит pointerup — и микрофон остался бы открытым
   try{ ptt.setPointerCapture(e.pointerId); }catch{}
   if(!conv){ resume(); return; }   // из паузы/обрыва — сначала подключиться
-  isHold()?setWanted(true):setWanted(!micWanted);
+  if(isToggle()){
+    // Смысл режима: нажал — слушает, нажал ещё раз — сразу отвечает и
+    // дальше молчит. Отдельные кнопки «хватит-отвечай» и «тихо» не нужны.
+    if(micWanted){ setWanted(false); answerNow(); }
+    else { if(quiet) setQuiet(false); setWanted(true); }
+    return;
+  }
+  setWanted(!micWanted);
 });
 ptt.addEventListener('pointerup',e=>{ e.preventDefault(); if(isHold()) setWanted(false); });
 ptt.addEventListener('pointercancel',()=>{ if(isHold()) setWanted(false); });
@@ -1145,6 +1177,7 @@ $('dlgBtn').onclick=async()=>{
   refreshDirButtons();
 };
 const INSTANT={
+  qaHello:'Begrüße JETZT die Menschen vor dir: stell dich mit Namen und Titel vor, kurz und königlich (1-2 Sätze), und lade sie ein, dich anzusprechen.',
   qaLouder:'Du hast den Gast akustisch nicht verstanden. Bitte ihn KURZ (1 Satz), königlich-charmant, lauter und deutlicher zu wiederholen.',
   qaFollow:'Mache JETZT einen kurzen königlichen Aufruf (1-2 Sätze), dir zu folgen: robotollern. Danach normal weiter.',
   qaBye:'Beende die Begegnung JETZT: warmer königlicher Abschied in 1-2 Sätzen, erwähne robotollern. Danach schweige und warte.',
@@ -1223,13 +1256,13 @@ refreshMicList();   // сохранённый микрофон/выход дол
 // обычное нажатие клавиши. ВАЖНО: дешёвые «кнопки для селфи» шлют кнопки
 // громкости, а их Android забирает себе и странице не отдаёт — такие не годятся.
 const DEJSTVIYA = [
-  ['mic',    '🎤 Микрофон вкл/выкл',      ()=>{ if(!conv){ resume(); return; } setWanted(!micWanted); }],
-  ['answer', '⏭ Хватит — отвечай',        ()=>$('answerNow')?.click()],
-  ['hush',   '⏹ СТОП — замолчать',        ()=>$('hushBtn')?.click()],
-  ['quiet',  '🤫 ТИХО',                    ()=>$('quietBtn')?.click()],
-  ['louder', '🔊 Громче, повтори',        ()=>$('qaLouder')?.click()],
-  ['follow', '📣 Подписка',                ()=>$('qaFollow')?.click()],
-  ['bye',    '👋 Завершить диалог',        ()=>$('qaBye')?.click()],
+  // две главные — ради них всё и затевалось
+  ['mic',    '🎤 ГОВОРИТЬ (нажал / нажал ещё раз)', ()=>$('ptt')?.click()],
+  ['stop',   '✋ ХВАТИТ — замолчать',                ()=>$('stopTalk')?.dispatchEvent(new PointerEvent('pointerup'))],
+  // необязательные, если на устройстве есть лишние кнопки
+  ['hello',  '👑 Приветствие',                      ()=>$('qaHello')?.click()],
+  ['follow', '📣 Подписка',                         ()=>$('qaFollow')?.click()],
+  ['bye',    '👋 Завершить диалог',                 ()=>$('qaBye')?.click()],
 ];
 let klavishi = {};
 try{ klavishi = JSON.parse(localStorage.getItem('klavishi')||'{}'); }catch{}
@@ -1280,10 +1313,7 @@ window.addEventListener('keydown', e=>{
   e.preventDefault();
   navigator.vibrate?.(30);
   // микрофон в режиме «держать»: педаль держат — микрофон открыт
-  if(id==='mic' && micMode()==='hold'){
-    if(!conv){ resume(); return; }
-    setWanted(true); return;
-  }
+  // в режиме «нажал-нажал» удержание не нужно: клик по кнопке делает всё сам
   (DEJSTVIYA.find(d=>d[0]===id)||[])[2]?.();
 });
 
