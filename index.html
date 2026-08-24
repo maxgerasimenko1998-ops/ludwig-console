@@ -187,6 +187,16 @@
     </div>
 
     <div class="card">
+      <label>🎛 Физические кнопки (Bluetooth)</label>
+      <p class="hint">Педаль-«листалка» или пульт для читалки прикидываются обычной
+      клавиатурой. Подключи по Bluetooth, нажми «Назначить», потом нажми кнопку
+      на устройстве — она привяжется к действию. Телефон можно убрать в карман.</p>
+      <div id="klavList"></div>
+      <p class="hint" id="lastKey">Последняя клавиша: — (нажми любую, чтобы проверить, что устройство доходит)</p>
+      <button id="lockBtn" style="width:100%;margin-top:8px;background:#444">🔒 ЗАМОК — не реагировать на касания</button>
+    </div>
+
+    <div class="card">
       <label>🎬 РЕЖИССЁР — робот исполнит (аудитория не слышит)</label>
       <textarea id="dirInput" placeholder="напр. Wir stehen vor dem Roten Rathaus in Berlin. Du kandidierst als Bürgermeister. Halte eine lange Rede fürs Video: versprich, alle Straßen zu reparieren und Freibier für alle. Fordere die anderen Kandidaten zum Duell heraus. Beginne mit: „Mein Volk, Euer König hat entschieden!" Am Ende: folgt robotollern."></textarea>
       <button id="dirBtn" disabled>🎬 МОНОЛОГ</button>
@@ -229,7 +239,15 @@
 
     <div class="card">
       <label>Журнал</label>
-      <div id="log"></div>
+      <div id="lockScreen" class="hidden" style="position:fixed;inset:0;z-index:9999;
+  background:#000d;display:flex;align-items:center;justify-content:center;flex-direction:column;
+  color:#eee;font-size:18px;text-align:center;padding:24px">
+  <div>🔒 Экран заперт</div>
+  <div style="font-size:14px;opacity:.7;margin-top:10px">Физические кнопки работают.<br>Держи палец три секунды, чтобы отпереть.</div>
+  <div id="lockHold" style="margin-top:22px;width:150px;height:150px;border-radius:50%;
+    border:3px solid #666;display:flex;align-items:center;justify-content:center;font-size:15px">держи</div>
+</div>
+<div id="log"></div>
     </div>
   </div>
 
@@ -1198,6 +1216,110 @@ function showSetup(){
 refreshPersonaList('Ludwig — боевой (промпт и лор из агента)');
 renderBoard();
 refreshMicList();   // сохранённый микрофон/выход должны работать уже с ПЕРВОГО подключения
+
+// ══════════ ФИЗИЧЕСКИЕ КНОПКИ ПО BLUETOOTH ══════════
+// Педали-«листалки» и пульты для читалок прикидываются обычной Bluetooth-
+// клавиатурой и шлют PageUp/PageDown/стрелки/пробел — браузер получает их как
+// обычное нажатие клавиши. ВАЖНО: дешёвые «кнопки для селфи» шлют кнопки
+// громкости, а их Android забирает себе и странице не отдаёт — такие не годятся.
+const DEJSTVIYA = [
+  ['mic',    '🎤 Микрофон вкл/выкл',      ()=>{ if(!conv){ resume(); return; } setWanted(!micWanted); }],
+  ['answer', '⏭ Хватит — отвечай',        ()=>$('answerNow')?.click()],
+  ['hush',   '⏹ СТОП — замолчать',        ()=>$('hushBtn')?.click()],
+  ['quiet',  '🤫 ТИХО',                    ()=>$('quietBtn')?.click()],
+  ['louder', '🔊 Громче, повтори',        ()=>$('qaLouder')?.click()],
+  ['follow', '📣 Подписка',                ()=>$('qaFollow')?.click()],
+  ['bye',    '👋 Завершить диалог',        ()=>$('qaBye')?.click()],
+];
+let klavishi = {};
+try{ klavishi = JSON.parse(localStorage.getItem('klavishi')||'{}'); }catch{}
+let uchim = null;          // какое действие сейчас ждёт нажатия
+
+function risuemKlavishi(){
+  const box = $('klavList'); if(!box) return;
+  box.innerHTML = '';
+  for(const [id, imya] of DEJSTVIYA){
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.cssText = 'margin-bottom:6px;align-items:center';
+    const t = document.createElement('div');
+    t.style.cssText = 'flex:1;font-size:14px';
+    t.textContent = imya + (klavishi[id] ? '  →  ' + klavishi[id] : '  →  не назначена');
+    const b = document.createElement('button');
+    b.textContent = uchim===id ? '…жми кнопку' : 'Назначить';
+    b.style.cssText = 'flex:0 0 auto;padding:8px 12px;font-size:13px';
+    b.onclick = ()=>{ uchim = (uchim===id? null : id); risuemKlavishi();
+      if(uchim) flash('Нажми кнопку на устройстве'); };
+    const d = document.createElement('button');
+    d.textContent = '✕'; d.title = 'снять';
+    d.style.cssText = 'flex:0 0 auto;padding:8px 10px;font-size:13px;background:#553';
+    d.onclick = ()=>{ delete klavishi[id]; store('klavishi', JSON.stringify(klavishi)); risuemKlavishi(); };
+    row.append(t, b, d);
+    box.appendChild(row);
+  }
+}
+risuemKlavishi();
+
+function kodKlavishi(e){ return e.code || e.key; }
+
+window.addEventListener('keydown', e=>{
+  // не мешаем печатать в полях ввода
+  const t = e.target;
+  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
+  const k = kodKlavishi(e);
+  $('lastKey').textContent = 'Последняя клавиша: ' + k + (uchim ? ' → назначаю…' : '');
+  if(uchim){
+    // одна клавиша — одно действие: снимаем её с прошлого владельца
+    for(const id in klavishi) if(klavishi[id]===k) delete klavishi[id];
+    klavishi[uchim] = k; store('klavishi', JSON.stringify(klavishi));
+    log('🎛 «'+k+'» назначена: '+(DEJSTVIYA.find(d=>d[0]===uchim)||[])[1]);
+    uchim = null; risuemKlavishi(); e.preventDefault(); return;
+  }
+  const id = Object.keys(klavishi).find(i => klavishi[i]===k);
+  if(!id) return;
+  e.preventDefault();
+  navigator.vibrate?.(30);
+  // микрофон в режиме «держать»: педаль держат — микрофон открыт
+  if(id==='mic' && micMode()==='hold'){
+    if(!conv){ resume(); return; }
+    setWanted(true); return;
+  }
+  (DEJSTVIYA.find(d=>d[0]===id)||[])[2]?.();
+});
+
+window.addEventListener('keyup', e=>{
+  const k = kodKlavishi(e);
+  if(klavishi.mic===k && micMode()==='hold' && micWanted) setWanted(false);
+});
+
+// ── ЗАМОК ЭКРАНА: телефон в кармане, касания игнорируются, кнопки работают ──
+$('lockBtn').onclick = ()=>{
+  $('lockScreen').classList.remove('hidden');
+  keepAwake();
+  log('🔒 Экран заперт — работают только физические кнопки');
+};
+(function(){
+  const hold = $('lockHold'); if(!hold) return;
+  // Отпирание по ВРЕМЕНИ, а не по числу тиков: в фоне браузер придерживает
+  // таймеры, и счётчик тиков врал — замок то не открывался, то открывался сам.
+  const DERZHAT = 3000;
+  let nachalo = 0, tik = null;
+  function stop(){ if(tik){ clearInterval(tik); tik = null; } nachalo = 0; hold.textContent = 'держи'; }
+  function start(){
+    stop();
+    nachalo = performance.now();
+    tik = setInterval(()=>{
+      const proshlo = performance.now() - nachalo;
+      if(proshlo >= DERZHAT){ stop(); $('lockScreen').classList.add('hidden'); log('🔓 Экран отперт'); return; }
+      hold.textContent = Math.ceil((DERZHAT - proshlo)/1000) + '…';
+    }, 200);
+  }
+  hold.addEventListener('pointerdown', e=>{ e.preventDefault(); start(); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev => hold.addEventListener(ev, stop));
+  // страховка: палец отпустили мимо кружка
+  window.addEventListener('pointerup', ()=>{ if(nachalo) stop(); });
+})();
+
 </script>
 </body>
 </html>
