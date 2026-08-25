@@ -80,7 +80,7 @@
 </head>
 <body>
   <h1>🤖 Пульт оператора</h1>
-  <p class="hint" style="text-align:center;margin-top:-6px">версия 25 августа (вечер) · если карточки «Физические кнопки» не видно — обнови страницу</p>
+  <p class="hint" style="text-align:center;margin-top:-6px">версия 25 августа (поздний вечер) · если карточки «Физические кнопки» не видно — обнови страницу</p>
 
   <div id="status">
     <span class="dot" id="connDot"></span><span id="connText">не подключено</span>
@@ -93,14 +93,20 @@
 <div class="card" style="border:1px solid #4a4a2a">
     <label>🎛 Физические кнопки</label>
     <p class="hint"><b>Проверка работает до подключения к роботу</b> — кредиты не тратятся.<br>
-    1. Кликер-презентер: вставь USB-приёмник в гнездо телефона (он лежит внутри пульта,
-    под крышкой батарейного отсека). Bluetooth-брелок: подключи в настройках телефона.<br>
-    2. Ткни в жёлтое поле, потом нажми ◀ или ▶ на устройстве.<br>
-    3. Робот уже слушается: <b>▶ / вниз / пробел — ГОВОРИТЬ, ◀ / вверх / Esc — ХВАТИТ</b>.
-    Ничего назначать не надо. «Назначить» — только если хочешь другие кнопки.</p>
-    <input id="lovushka" inputmode="none" autocomplete="off" readonly
-      placeholder="① НАЖМИ СЮДА, потом на кнопку устройства"
-      style="width:100%;margin-bottom:8px;text-align:center;background:#26261a;border:1px solid #6a6a3a">
+    1. Подключи брелок в настройках телефона (светодиод перестал мигать = подключён).<br>
+    2. Жми «① Телефон вообще видит брелок?» — это отделяет поломку брелока от поломки страницы.<br>
+    3. Ткни в жёлтое поле, нажми ◀ или ▶ на брелоке, смотри в чёрное окно внизу.<br>
+    Назначать ничего не надо: <b>▶ = ГОВОРИТЬ, ◀ = ХВАТИТ</b> уже работают.</p>
+    <button id="testKlav" style="width:100%;margin-bottom:6px;background:#3a3a2a">① Телефон вообще видит брелок?</button>
+    <p class="hint" id="testKlavHint" style="margin-top:0">Нажми — откроется обычное поле. Смотри на низ экрана:
+    <b>выехала экранная клавиатура</b> — телефон брелок клавиатурой НЕ считает (не подключён или не тот режим);
+    <b>не выехала</b> — считает, иди к шагу ②.</p>
+    <input id="probaKlav" type="text" autocomplete="off" placeholder="сюда телефон покажет свою клавиатуру"
+      style="width:100%;margin-bottom:8px;display:none">
+
+    <input id="lovushka" inputmode="none" autocomplete="off" spellcheck="false" autocapitalize="off"
+      style="width:100%;margin-bottom:2px;text-align:center;letter-spacing:2px;background:#26261a;border:1px solid #6a6a3a">
+    <p class="hint" id="lovStatus" style="margin-top:0;margin-bottom:8px">② НАЖМИ НА ЖЁЛТОЕ ПОЛЕ, потом на кнопку брелока</p>
     <div id="klavList"></div>
     <div id="lastKey" class="hint" style="background:#1a1a1a;border-radius:8px;padding:8px;min-height:52px">Проверка устройства: нажми на нём любую кнопку.<br>Здесь появится название клавиши. Пусто — значит нажатия до страницы не доходят: приёмник не вставлен, брелок не подключён, либо устройство шлёт кнопки громкости (их система забирает себе).</div>
     <button id="lockBtn" style="width:100%;margin-top:8px;background:#444">🔒 ЗАМОК — не реагировать на касания</button>
@@ -1281,6 +1287,9 @@ const DEJSTVIYA = [
 const PO_UMOLCHANIYU = {
   PageDown:'mic',  ArrowRight:'mic',  ArrowDown:'mic',  Space:'mic',  Enter:'mic',
   PageUp:'stop',   ArrowLeft:'stop',  ArrowUp:'stop',   Escape:'stop',
+  // движение курсора в поле-ловушке: так ловятся стрелки, которые айфон
+  // странице не отдаёт (WebKit #149054)
+  CaretRight:'mic', CaretLeft:'stop',
 };
 const PODPIS_UMOLCH = { mic:'▶ / вниз / пробел', stop:'◀ / вверх / Esc' };
 let klavishi = {};
@@ -1325,25 +1334,55 @@ risuemKlavishi();
 
 function kodKlavishi(e){ return e.code || e.key; }
 
-// На телефоне внешняя клавиатура отдаёт нажатия ТОЛЬКО активному полю ввода:
-// без фокуса страница не получает ничего (поймано Максом 25.08). Поэтому есть
-// поле-ловушка, и «Назначить» само ставит в него курсор.
+// ── ПОЧЕМУ ВСЁ ТАК СЛОЖНО (разобрано 25.08 вечером, два бага айфона) ──
+// 1. iOS отдаёт нажатия внешней клавиатуры ТОЛЬКО в поле, где стоит курсор,
+//    и только если поле ПО-НАСТОЯЩЕМУ редактируемое. Поле с readonly нажатий
+//    не получает — именно поэтому брелок молчал.
+// 2. Стрелки от внешней клавиатуры WebKit странице не отдаёт вообще:
+//    bugs.webkit.org/show_bug.cgi?id=149054. А листалки шлют именно стрелки.
+// Поэтому поле-ловушка редактируемое (экранная клавиатура спрятана через
+// inputmode="none"), в нём лежат точки, курсор стоит ровно в середине.
+// Стрелка двигает курсор — по сдвигу видно, какую кнопку нажали, даже когда
+// события клавиши нет и никогда не будет.
+const TOCHKI = '·'.repeat(41);
+const SEREDINA = 20;
+let stavimSami = false;    // курсор двигаем мы сами — это не нажатие
+let lovim = false;         // режим «держим курсор в жёлтом поле»
+let bylaKlavisha = 0;      // время последнего настоящего события клавиши
+
+function vSeredinu(){
+  const p = $('lovushka'); if(!p) return;
+  stavimSami = true;
+  if(p.value !== TOCHKI) p.value = TOCHKI;
+  try{ p.setSelectionRange(SEREDINA, SEREDINA); }catch{}
+  setTimeout(()=>{ stavimSami = false; }, 80);
+}
+function statusLovushki(t){ const el = $('lovStatus'); if(el) el.innerHTML = t; }
+
 function vzyatFokus(){
   const p = $('lovushka'); if(!p) return;
-  try{ p.focus({preventScroll:true}); p.setAttribute('readonly','readonly'); }catch{}
-  // подсказку меняем сразу, не полагаясь на событие фокуса
-  p.placeholder = '② Готов — жми кнопку на устройстве';
+  lovim = true;
+  try{ p.focus({preventScroll:true}); }catch{}
+  vSeredinu();
   p.style.borderColor = '#c8a020';
+  statusLovushki('<b style="color:#e0c060">② Готов — жми кнопку на брелоке</b>');
 }
 $('lovushka')?.addEventListener('click', vzyatFokus);
-$('lovushka')?.addEventListener('focus', ()=>{
-  $('lovushka').style.borderColor = '#c8a020';
-  $('lovushka').placeholder = '② Готов — жми кнопку на устройстве';
-});
 $('lovushka')?.addEventListener('blur', ()=>{
   $('lovushka').style.borderColor = '#6a6a3a';
-  $('lovushka').placeholder = '① НАЖМИ СЮДА, потом на кнопку устройства';
+  if(!lovim) statusLovushki('② НАЖМИ НА ЖЁЛТОЕ ПОЛЕ, потом на кнопку брелока');
 });
+vSeredinu();
+
+// Курсор увели из поля касанием экрана — возвращаем: иначе нажатия брелока
+// снова уходят в никуда.
+document.addEventListener('click', ()=>{
+  if(!lovim) return;
+  const a = document.activeElement;
+  if(a && a.id!=='lovushka' && (a.tagName==='INPUT' || a.tagName==='TEXTAREA' || a.isContentEditable)) return;
+  setTimeout(vzyatFokus, 60);
+});
+
 // ОДИН обработчик на всю страницу. Отдельный на поле-ловушке НЕ вешать:
 // нажатие в поле всплывает до окна, срабатывало два раза подряд — микрофон
 // открывался и тут же закрывался (поймано проверкой 25.08 вечером).
@@ -1353,29 +1392,74 @@ function obrabotatKlavishu(e){
   // не мешаем печатать в полях ввода
   const t = e.target;
   if(t && t.id!=='lovushka' && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
-  const k = kodKlavishi(e);
-  // Копим последние пять нажатий: по ним сразу видно, что именно шлёт пульт
+  bylaKlavisha = performance.now();
+  if(srabotat(kodKlavishi(e), '')) e.preventDefault();
+}
+
+// Ловля по курсору — работает там, где события клавиши не приходят.
+document.addEventListener('selectionchange', ()=>{
+  if(stavimSami) return;
+  const p = $('lovushka'); if(!p || document.activeElement !== p) return;
+  const poz = p.selectionStart;
+  if(poz === SEREDINA) return;
+  const vpravo = poz > SEREDINA;
+  vSeredinu();
+  // настоящая клавиша только что отработала — не считать её второй раз
+  if(performance.now() - bylaKlavisha < 500) return;
+  srabotat(vpravo ? 'CaretRight' : 'CaretLeft', vpravo ? 'курсор вправо' : 'курсор влево');
+});
+
+// Брелок может слать не стрелку, а обычный знак — тогда он просто напечатается.
+$('lovushka')?.addEventListener('input', ()=>{
+  const p = $('lovushka'); const v = p.value;
+  if(stavimSami || v === TOCHKI) return;
+  let znak = '';
+  if(v.length > TOCHKI.length){ znak = v[Math.max(0, p.selectionStart-1)] || ''; }
+  vSeredinu();
+  if(performance.now() - bylaKlavisha < 500) return;
+  srabotat(znak ? 'Znak:'+znak : 'Pravka', znak ? 'напечатался знак «'+znak+'»' : 'поле изменилось');
+});
+
+// Общий вход: и настоящая клавиша, и пойманное движение курсора.
+function srabotat(k, opisanie){
+  // Копим последние пять нажатий: по ним сразу видно, что именно шлёт брелок
   // и шлёт ли вообще (кнопки громкости до страницы не доходят никогда).
-  poslednie.unshift({k, t: new Date().toLocaleTimeString('ru-RU')});
+  poslednie.unshift({k, o: opisanie, t: new Date().toLocaleTimeString('ru-RU')});
   poslednie.length = Math.min(poslednie.length, 5);
-  $('lastKey').innerHTML = '<b>Приходят клавиши:</b><br>' +
-    poslednie.map(p => `${p.t} — <b>${p.k}</b>`).join('<br>') +
+  $('lastKey').innerHTML = '<b>Пришло с устройства:</b><br>' +
+    poslednie.map(p => `${p.t} — <b>${p.k}</b>` + (p.o ? ' <span style="opacity:.7">('+p.o+')</span>' : '')).join('<br>') +
     (uchim ? '<br><span style="color:#e0c060">назначаю…</span>' : '');
+  navigator.vibrate?.(30);
   if(uchim){
     // одна клавиша — одно действие: снимаем её с прошлого владельца
     for(const id in klavishi) if(klavishi[id]===k) delete klavishi[id];
     klavishi[uchim] = k; store('klavishi', JSON.stringify(klavishi));
     log('🎛 «'+k+'» назначена: '+(DEJSTVIYA.find(d=>d[0]===uchim)||[])[1]);
-    uchim = null; risuemKlavishi(); e.preventDefault(); return;
+    uchim = null; risuemKlavishi(); return true;
   }
   const id = dejstvieDlyaKlavishi(k);
-  if(!id) return;
-  e.preventDefault();
-  navigator.vibrate?.(30);
+  if(!id) return false;
   // микрофон в режиме «держать»: педаль держат — микрофон открыт
   // в режиме «нажал-нажал» удержание не нужно: клик по кнопке делает всё сам
   (DEJSTVIYA.find(d=>d[0]===id)||[])[2]?.();
+  return true;
 }
+
+// ── ШАГ ①: видит ли телефон брелок клавиатурой ──
+// Если при пустом обычном поле выезжает экранная клавиатура — значит внешней
+// клавиатуры для телефона НЕТ, и чинить надо брелок, а не страницу.
+// ВНИМАНИЕ: писать «$('x')?.onclick = …» нельзя — это синтаксическая ошибка,
+// и вместе с ней молча умирает ВЕСЬ скрипт страницы (поймано 25.08).
+const knopkaTest = $('testKlav');
+if(knopkaTest) knopkaTest.onclick = ()=>{
+  lovim = false;
+  const p = $('probaKlav'); if(!p) return;
+  p.style.display = 'block'; p.value = '';
+  try{ p.focus({preventScroll:true}); }catch{}
+  $('testKlavHint').innerHTML = '<b style="color:#e0c060">Смотри на низ экрана прямо сейчас.</b><br>' +
+    'Выехала экранная клавиатура — телефон брелок клавиатурой НЕ считает: он не подключён либо стоит не в том режиме.<br>' +
+    'Не выехала (или видна только узкая полоска) — телефон брелок видит, переходи к шагу ②.';
+};
 
 window.addEventListener('keyup', e=>{
   const k = kodKlavishi(e);
@@ -1386,6 +1470,7 @@ window.addEventListener('keyup', e=>{
 $('lockBtn').onclick = ()=>{
   $('lockScreen').classList.remove('hidden');
   keepAwake();
+  vzyatFokus();   // под замком курсор обязан остаться в поле-ловушке
   log('🔒 Экран заперт — работают только физические кнопки');
 };
 (function(){
@@ -1404,6 +1489,8 @@ $('lockBtn').onclick = ()=>{
       hold.textContent = Math.ceil((DERZHAT - proshlo)/1000) + '…';
     }, 200);
   }
+  // касание запертого экрана не должно уводить курсор из поля-ловушки
+  $('lockScreen')?.addEventListener('pointerdown', e=>{ if(e.target!==hold) e.preventDefault(); });
   hold.addEventListener('pointerdown', e=>{ e.preventDefault(); start(); });
   ['pointerup','pointercancel','pointerleave'].forEach(ev => hold.addEventListener(ev, stop));
   // страховка: палец отпустили мимо кружка
