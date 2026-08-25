@@ -194,7 +194,7 @@
       клавиатурой. Подключи по Bluetooth, нажми «Назначить», потом нажми кнопку
       на устройстве — она привяжется к действию. Телефон можно убрать в карман.</p>
       <div id="klavList"></div>
-      <p class="hint" id="lastKey">Последняя клавиша: — (нажми любую, чтобы проверить, что устройство доходит)</p>
+      <div id="lastKey" class="hint" style="background:#1a1a1a;border-radius:8px;padding:8px;min-height:52px">Проверка устройства: нажми на нём любую кнопку.<br>Здесь появится название клавиши. Пусто — значит устройство шлёт кнопки громкости, они до страницы не доходят.</div>
       <button id="lockBtn" style="width:100%;margin-top:8px;background:#444">🔒 ЗАМОК — не реагировать на касания</button>
     </div>
 
@@ -1267,6 +1267,7 @@ const DEJSTVIYA = [
 let klavishi = {};
 try{ klavishi = JSON.parse(localStorage.getItem('klavishi')||'{}'); }catch{}
 let uchim = null;          // какое действие сейчас ждёт нажатия
+const poslednie = [];      // последние нажатия — для проверки устройства
 
 function risuemKlavishi(){
   const box = $('klavList'); if(!box) return;
@@ -1300,7 +1301,13 @@ window.addEventListener('keydown', e=>{
   const t = e.target;
   if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
   const k = kodKlavishi(e);
-  $('lastKey').textContent = 'Последняя клавиша: ' + k + (uchim ? ' → назначаю…' : '');
+  // Копим последние пять нажатий: по ним сразу видно, что именно шлёт пульт
+  // и шлёт ли вообще (кнопки громкости до страницы не доходят никогда).
+  poslednie.unshift({k, t: new Date().toLocaleTimeString('ru-RU')});
+  poslednie.length = Math.min(poslednie.length, 5);
+  $('lastKey').innerHTML = '<b>Приходят клавиши:</b><br>' +
+    poslednie.map(p => `${p.t} — <b>${p.k}</b>`).join('<br>') +
+    (uchim ? '<br><span style="color:#e0c060">назначаю…</span>' : '');
   if(uchim){
     // одна клавиша — одно действие: снимаем её с прошлого владельца
     for(const id in klavishi) if(klavishi[id]===k) delete klavishi[id];
