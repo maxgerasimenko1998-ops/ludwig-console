@@ -184,7 +184,7 @@
       <div class="quick">
         <button id="qaHello">🗣 Заговорить первым</button>
         <button id="qaLouder">🔊 Громче, повтори</button>
-        <button id="qaFollow">📣 Подписка</button>
+        <button id="qaAnswer">⏭ ОТВЕЧАЙ</button>
         <button id="qaBye">👋 Завершить</button>
       </div>
     </div>
@@ -204,7 +204,11 @@
       <div id="lastKey" class="hint"></div>
     </div>
 
-    <div class="card">
+    <!-- РЕЖИССЁР СПРЯТАН 26.08: на улице печатать в это поле некогда, Макс
+         режиссирует голосом в микрофон («сейчас ты подойдёшь к капитану…») —
+         и это работает. Разметку не удаляю: за неё держатся кнопки быстрых
+         действий, они шлют команды по тому же каналу ⟦REGIE⟧. -->
+    <div class="card hidden" style="display:none">
       <label>🎬 РЕЖИССЁР — робот исполнит (аудитория не слышит)</label>
       <textarea id="dirInput" placeholder="напр. Wir stehen vor dem Roten Rathaus in Berlin. Du kandidierst als Bürgermeister. Halte eine lange Rede fürs Video: versprich, alle Straßen zu reparieren und Freibier für alle. Fordere die anderen Kandidaten zum Duell heraus. Beginne mit: „Mein Volk, Euer König hat entschieden!" Am Ende: folgt robotollern."></textarea>
       <button id="dirBtn" disabled>🎬 МОНОЛОГ</button>
@@ -681,13 +685,31 @@ $('hushBtn2')?.addEventListener('click', ()=>{ vibrate([90,60,90]); hush(); });
     if(!quiet) setQuiet(true);
     vibrate([60,40,60]);
     log('✋ Хватит — молчит и не слушает. Продолжить — «ГОВОРИТЬ»');
-    setTimeout(()=>{ try{ conv?.setVolume({volume:1}); }catch{} }, 1500);
+    // РАНЬШЕ звук возвращался ровно через 1,5 секунды — и речь продолжалась
+    // с того места, где её застали. Именно поэтому кнопка казалась мёртвой
+    // (поймано Максом 26.08). Теперь ждём, пока робот реально договорит.
+    zhdatKoncaRechi();
   }
   // Длинное нажатие на телефоне ненадёжно: браузер перехватывает его своим
   // меню выделения и до страницы оно не доходит (поймано Максом 23.08).
   // Поэтому полный обрыв — отдельной видимой кнопкой, а тут простой клик.
   b.addEventListener('click', e=>{ e.preventDefault(); korotko(); });
 })();
+
+// Держим звук выключенным, пока агент не замолчит: проверяем каждые 300 мс,
+// на всякий случай не дольше 30 секунд.
+function zhdatKoncaRechi(){
+  clearInterval(zhdatKoncaRechi._t);
+  const nachalo = performance.now();
+  zhdatKoncaRechi._t = setInterval(()=>{
+    const dogovoril = !agentSpeaking;
+    const pora = performance.now() - nachalo > 30000;
+    if(dogovoril || pora){
+      clearInterval(zhdatKoncaRechi._t);
+      try{ conv?.setVolume({volume:1}); }catch{}
+    }
+  }, 300);
+}
 
 async function keepAwake(){
   try{
@@ -1017,6 +1039,10 @@ async function answerNow(){
   }
 }
 $('answerNow').onclick=answerNow;
+// «⏭ ОТВЕЧАЙ» — та же механика, но видимой кнопкой в быстрых действиях.
+// Нужна, когда вокруг шум и робот не понимает, что гость договорил (26.08).
+const knopkaOtvechaj = $('qaAnswer');
+if(knopkaOtvechaj) knopkaOtvechaj.onclick = answerNow;
 
 // ---- 🤫 ТИХО ----
 // Пауза без разрыва сессии. Микрофон закрыт, и раз в 8 секунд уходит
@@ -1195,7 +1221,6 @@ const INSTANT={
     'Danach schweige und höre aufmerksam zu: die nächste Stimme, die du hörst, spricht zu dir — auch wenn sie leise, kurz oder zögerlich ist. '+
     'Verabschiede dich auf keinen Fall, bevor dein Gegenüber dir mehrmals geantwortet hat.',
   qaLouder:'Du hast den Gast akustisch nicht verstanden. Bitte ihn KURZ (1 Satz), königlich-charmant, lauter und deutlicher zu wiederholen.',
-  qaFollow:'Mache JETZT einen kurzen königlichen Aufruf (1-2 Sätze), dir zu folgen: robotollern. Danach normal weiter.',
   qaBye:'Beende die Begegnung JETZT: warmer königlicher Abschied in 1-2 Sätzen, erwähne robotollern. Danach schweige und warte.',
 };
 let instantBusy=false;
