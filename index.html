@@ -182,7 +182,7 @@
     <div class="card">
       <label>⚡ Быстрые действия — скажет сразу</label>
       <div class="quick">
-        <button id="qaHello">👑 Приветствие</button>
+        <button id="qaHello">🗣 Заговорить первым</button>
         <button id="qaLouder">🔊 Громче, повтори</button>
         <button id="qaFollow">📣 Подписка</button>
         <button id="qaBye">👋 Завершить</button>
@@ -1179,7 +1179,16 @@ $('dlgBtn').onclick=async()=>{
   refreshDirButtons();
 };
 const INSTANT={
-  qaHello:'Begrüße JETZT die Menschen vor dir: stell dich mit Namen und Titel vor, kurz und königlich (1-2 Sätze), und lade sie ein, dich anzusprechen.',
+  // Кнопка «заговорить первым»: раз оператор её нажал — перед роботом ТОЧНО
+  // стоит человек. Поэтому здесь и приветствие, и вопрос, и приказ слушать
+  // внимательно: 25.08 в Бад Зарове Людвига было тяжело разговорить, он
+  // отвечал только на громкое прямое обращение.
+  qaHello:'Vor dir steht JETZT ein Mensch — der Operator hat dich gerufen, also ist wirklich jemand da. '+
+    'Ergreife als Erster das Wort: stell dich mit Namen und Titel vor, königlich und knapp (1-2 Sätze), '+
+    'beziehe dabei den Ort ein, an dem du dich gerade befindest, und schließe mit EINER konkreten, leicht zu beantwortenden Frage an dein Gegenüber. '+
+    'Formuliere es jedes Mal neu — wiederhole keine Begrüßung von vorhin. '+
+    'Danach schweige und höre aufmerksam zu: die nächste Stimme, die du hörst, spricht zu dir — auch wenn sie leise, kurz oder zögerlich ist. '+
+    'Verabschiede dich auf keinen Fall, bevor dein Gegenüber dir mehrmals geantwortet hat.',
   qaLouder:'Du hast den Gast akustisch nicht verstanden. Bitte ihn KURZ (1 Satz), königlich-charmant, lauter und deutlicher zu wiederholen.',
   qaFollow:'Mache JETZT einen kurzen königlichen Aufruf (1-2 Sätze), dir zu folgen: robotollern. Danach normal weiter.',
   qaBye:'Beende die Begegnung JETZT: warmer königlicher Abschied in 1-2 Sätzen, erwähne robotollern. Danach schweige und warte.',
@@ -1263,7 +1272,7 @@ const DEJSTVIYA = [
   ['stop',   '✋ ХВАТИТ — замолчать',                ()=>$('stopTalk')?.click()],
   ['off',    '⏹ ПОЛНЫЙ СТОП — оборвать связь',      ()=>$('hushBtn2')?.click()],
   // необязательные, если на устройстве есть лишние кнопки
-  ['hello',  '👑 Приветствие',                      ()=>$('qaHello')?.click()],
+  ['hello',  '🗣 Заговорить первым',               ()=>$('qaHello')?.click()],
   ['follow', '📣 Подписка',                         ()=>$('qaFollow')?.click()],
   ['bye',    '👋 Завершить диалог',                 ()=>$('qaBye')?.click()],
 ];
