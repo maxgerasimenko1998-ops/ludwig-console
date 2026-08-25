@@ -80,6 +80,7 @@
 </head>
 <body>
   <h1>🤖 Пульт оператора</h1>
+  <p class="hint" style="text-align:center;margin-top:-6px">версия 25 августа · если карточки «Физические кнопки» не видно — обнови страницу</p>
 
   <div id="status">
     <span class="dot" id="connDot"></span><span id="connText">не подключено</span>
@@ -89,6 +90,17 @@
   <div id="reconnBanner" class="banner hidden">🔄 Связь прервалась — переподключаюсь…</div>
 
   <!-- ЭКРАН НАСТРОЙКИ -->
+<div class="card" style="border:1px solid #4a4a2a">
+    <label>🎛 Физические кнопки (Bluetooth)</label>
+    <p class="hint"><b>Проверка работает до подключения к роботу</b> — кредиты не тратятся.<br>
+    1. Подключи кнопку по Bluetooth в настройках телефона.<br>
+    2. Нажми на ней кнопку и смотри в чёрное окно ниже.<br>
+    3. Появилось название клавиши — жми «Назначить», потом снова кнопку на устройстве.</p>
+    <div id="klavList"></div>
+    <div id="lastKey" class="hint" style="background:#1a1a1a;border-radius:8px;padding:8px;min-height:52px">Проверка устройства: нажми на нём любую кнопку.<br>Здесь появится название клавиши. Пусто — значит устройство шлёт кнопки громкости, они до страницы не доходят.</div>
+    <button id="lockBtn" style="width:100%;margin-top:8px;background:#444">🔒 ЗАМОК — не реагировать на касания</button>
+  </div>
+
   <div id="setup" class="card">
     <label>Agent ID (из дашборда ElevenLabs, один раз)</label>
     <input id="agentId" placeholder="agent_..." autocomplete="off">
@@ -189,16 +201,7 @@
       </div>
     </div>
 
-    <div class="card">
-      <label>🎛 Физические кнопки (Bluetooth)</label>
-      <p class="hint">Педаль-«листалка» или пульт для читалки прикидываются обычной
-      клавиатурой. Подключи по Bluetooth, нажми «Назначить», потом нажми кнопку
-      на устройстве — она привяжется к действию. Телефон можно убрать в карман.</p>
-      <div id="klavList"></div>
-      <div id="lastKey" class="hint" style="background:#1a1a1a;border-radius:8px;padding:8px;min-height:52px">Проверка устройства: нажми на нём любую кнопку.<br>Здесь появится название клавиши. Пусто — значит устройство шлёт кнопки громкости, они до страницы не доходят.</div>
-      <button id="lockBtn" style="width:100%;margin-top:8px;background:#444">🔒 ЗАМОК — не реагировать на касания</button>
-    </div>
-
+    
     <div class="card">
       <label>🎬 РЕЖИССЁР — робот исполнит (аудитория не слышит)</label>
       <textarea id="dirInput" placeholder="напр. Wir stehen vor dem Roten Rathaus in Berlin. Du kandidierst als Bürgermeister. Halte eine lange Rede fürs Video: versprich, alle Straßen zu reparieren und Freibier für alle. Fordere die anderen Kandidaten zum Duell heraus. Beginne mit: „Mein Volk, Euer König hat entschieden!" Am Ende: folgt robotollern."></textarea>
