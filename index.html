@@ -130,7 +130,8 @@
   <div id="live" class="hidden" style="display:none;flex-direction:column;gap:12px">
     <button id="ptt">🎤 ГОВОРИТЬ<br><small>микрофон выключен</small></button>
     <button id="answerNow" class="hidden" style="display:none"></button>
-    <button id="stopTalk" style="background:#8e2020;height:64px">✋ ХВАТИТ<br><small>замолчать и не слушать · держать 2 сек — оборвать связь</small></button>
+    <button id="stopTalk" style="background:#8e2020;height:64px;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none">✋ ХВАТИТ<br><small>замолчать и не слушать · связь остаётся</small></button>
+    <button id="hushBtn2" style="background:#5a1616;height:56px;touch-action:manipulation">⏹ ПОЛНЫЙ СТОП<br><small>оборвать связь совсем · продолжить — «ГОВОРИТЬ»</small></button>
     <div class="card">
       <label>Режим микрофона</label>
       <select id="micMode">
@@ -659,6 +660,7 @@ async function resume(){
 }
 function unhush(){ hushed=false; }
 $('hushBtn').onclick=hush;
+$('hushBtn2')?.addEventListener('click', ()=>{ vibrate([90,60,90]); hush(); });
 
 // ✋ ХВАТИТ — одна кнопка вместо «тихо» и «стоп».
 // Коротко: мгновенная тишина в колонке, вход закрыт, сессия ЖИВА — пинги
@@ -676,10 +678,10 @@ $('hushBtn').onclick=hush;
     log('✋ Хватит — молчит и не слушает. Продолжить — «ГОВОРИТЬ»');
     setTimeout(()=>{ try{ conv?.setVolume({volume:1}); }catch{} }, 1500);
   }
-  b.addEventListener('pointerdown', e=>{ e.preventDefault(); dolgo=false;
-    t=setTimeout(()=>{ dolgo=true; vibrate([90,60,90]); hush(); }, 2000); });
-  b.addEventListener('pointerup', ()=>{ if(t){ clearTimeout(t); t=null; } if(!dolgo) korotko(); dolgo=false; });
-  b.addEventListener('pointercancel', ()=>{ if(t){ clearTimeout(t); t=null; } dolgo=false; });
+  // Длинное нажатие на телефоне ненадёжно: браузер перехватывает его своим
+  // меню выделения и до страницы оно не доходит (поймано Максом 23.08).
+  // Поэтому полный обрыв — отдельной видимой кнопкой, а тут простой клик.
+  b.addEventListener('click', e=>{ e.preventDefault(); korotko(); });
 })();
 
 async function keepAwake(){
@@ -1258,7 +1260,8 @@ refreshMicList();   // сохранённый микрофон/выход дол
 const DEJSTVIYA = [
   // две главные — ради них всё и затевалось
   ['mic',    '🎤 ГОВОРИТЬ (нажал / нажал ещё раз)', ()=>$('ptt')?.click()],
-  ['stop',   '✋ ХВАТИТ — замолчать',                ()=>$('stopTalk')?.dispatchEvent(new PointerEvent('pointerup'))],
+  ['stop',   '✋ ХВАТИТ — замолчать',                ()=>$('stopTalk')?.click()],
+  ['off',    '⏹ ПОЛНЫЙ СТОП — оборвать связь',      ()=>$('hushBtn2')?.click()],
   // необязательные, если на устройстве есть лишние кнопки
   ['hello',  '👑 Приветствие',                      ()=>$('qaHello')?.click()],
   ['follow', '📣 Подписка',                         ()=>$('qaFollow')?.click()],
