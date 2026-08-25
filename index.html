@@ -96,6 +96,9 @@
     1. Подключи кнопку по Bluetooth в настройках телефона.<br>
     2. Нажми на ней кнопку и смотри в чёрное окно ниже.<br>
     3. Появилось название клавиши — жми «Назначить», потом снова кнопку на устройстве.</p>
+    <input id="lovushka" inputmode="none" autocomplete="off" readonly
+      placeholder="① НАЖМИ СЮДА, потом на кнопку устройства"
+      style="width:100%;margin-bottom:8px;text-align:center;background:#26261a;border:1px solid #6a6a3a">
     <div id="klavList"></div>
     <div id="lastKey" class="hint" style="background:#1a1a1a;border-radius:8px;padding:8px;min-height:52px">Проверка устройства: нажми на нём любую кнопку.<br>Здесь появится название клавиши. Пусто — значит устройство шлёт кнопки громкости, они до страницы не доходят.</div>
     <button id="lockBtn" style="width:100%;margin-top:8px;background:#444">🔒 ЗАМОК — не реагировать на касания</button>
@@ -1289,7 +1292,7 @@ function risuemKlavishi(){
     b.textContent = uchim===id ? '…жми кнопку' : 'Назначить';
     b.style.cssText = 'flex:0 0 auto;padding:8px 12px;font-size:13px';
     b.onclick = ()=>{ uchim = (uchim===id? null : id); risuemKlavishi();
-      if(uchim) flash('Нажми кнопку на устройстве'); };
+      if(uchim){ vzyatFokus(); flash('Курсор в жёлтом поле — жми кнопку на устройстве'); } };
     const d = document.createElement('button');
     d.textContent = '✕'; d.title = 'снять';
     d.style.cssText = 'flex:0 0 auto;padding:8px 10px;font-size:13px;background:#553';
@@ -1302,10 +1305,32 @@ risuemKlavishi();
 
 function kodKlavishi(e){ return e.code || e.key; }
 
-window.addEventListener('keydown', e=>{
+// На телефоне внешняя клавиатура отдаёт нажатия ТОЛЬКО активному полю ввода:
+// без фокуса страница не получает ничего (поймано Максом 25.08). Поэтому есть
+// поле-ловушка, и «Назначить» само ставит в него курсор.
+function vzyatFokus(){
+  const p = $('lovushka'); if(!p) return;
+  try{ p.focus({preventScroll:true}); p.setAttribute('readonly','readonly'); }catch{}
+  // подсказку меняем сразу, не полагаясь на событие фокуса
+  p.placeholder = '② Готов — жми кнопку на устройстве';
+  p.style.borderColor = '#c8a020';
+}
+$('lovushka')?.addEventListener('click', vzyatFokus);
+$('lovushka')?.addEventListener('focus', ()=>{
+  $('lovushka').style.borderColor = '#c8a020';
+  $('lovushka').placeholder = '② Готов — жми кнопку на устройстве';
+});
+$('lovushka')?.addEventListener('blur', ()=>{
+  $('lovushka').style.borderColor = '#6a6a3a';
+  $('lovushka').placeholder = '① НАЖМИ СЮДА, потом на кнопку устройства';
+});
+$('lovushka')?.addEventListener('keydown', e=>obrabotatKlavishu(e));
+window.addEventListener('keydown', e=>obrabotatKlavishu(e));
+
+function obrabotatKlavishu(e){
   // не мешаем печатать в полях ввода
   const t = e.target;
-  if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
+  if(t && t.id!=='lovushka' && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
   const k = kodKlavishi(e);
   // Копим последние пять нажатий: по ним сразу видно, что именно шлёт пульт
   // и шлёт ли вообще (кнопки громкости до страницы не доходят никогда).
@@ -1328,7 +1353,7 @@ window.addEventListener('keydown', e=>{
   // микрофон в режиме «держать»: педаль держат — микрофон открыт
   // в режиме «нажал-нажал» удержание не нужно: клик по кнопке делает всё сам
   (DEJSTVIYA.find(d=>d[0]===id)||[])[2]?.();
-});
+}
 
 window.addEventListener('keyup', e=>{
   const k = kodKlavishi(e);
