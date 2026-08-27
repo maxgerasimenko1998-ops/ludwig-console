@@ -759,11 +759,18 @@ document.addEventListener('visibilitychange',()=>{
 // Agent ID можно передать прямо в ссылке (?agent=agent_...) — удобно для
 // нового браузера или телефона: память-то у каждого своя. Из адреса сразу
 // убираем, чтобы ID не светился при показе экрана.
+// ЭТОТ ПУЛЬТ — ТОЛЬКО ДЛЯ ПРОГУЛОК, и мозг у него свой, уличный.
+// Раньше поле было пустым, а ID подхватывался из памяти браузера — и стоило
+// один раз вписать сюда эфирного агента, он оставался тут навсегда. Тогда на
+// улице отвечал эфирный Людвиг: промпт на 18 000 знаков длиннее (дороже каждая
+// реплика) и ответы по 5-7 предложений вместо уличных. Теперь свой агент
+// подставляется сам, а чужой пульт честно об этом говорит (27.08).
+const SVOJ_AGENT='agent_2501m0q1f81wff6sr8wfxmcee6zd';   // Ludwig — УЛИЦА
 try{
   const qa=new URLSearchParams(location.search).get('agent');
   if(qa && /^agent_[a-z0-9]+$/i.test(qa)){ localStorage.setItem('ludwigAgentId',qa); history.replaceState(null,'',location.pathname); }
 }catch{}
-$('agentId').value=localStorage.getItem('ludwigAgentId')||'';
+$('agentId').value=localStorage.getItem('ludwigAgentId')||SVOJ_AGENT;
 $('dayCtx').value=localStorage.getItem('dayCtx')||'';
 function log(l){ const e=$('log'); e.textContent+=l+'\n'; e.scrollTop=e.scrollHeight; }
 // НИКАКИХ alert(): Chrome предлагает «Dialogfelder unterdrücken», после чего
@@ -972,6 +979,7 @@ function scheduleReconnect(){
 $('connectBtn').onclick=async()=>{
   const agentId=$('agentId').value.trim();
   if(!agentId){ flash('⚠️ Вставь Agent ID'); return; }
+  if(agentId!==SVOJ_AGENT){ log('⚠️ ВНИМАНИЕ: это НЕ уличный мозг. Уличный — '+SVOJ_AGENT.slice(-8)+', сейчас стоит '+agentId.slice(-8)); }
   // Пароль у агента ВЫКЛЮЧЕН (21.08.2026, вечер) — без ключа тоже пускает.
   store('ludwigAgentId',agentId);
   store('xiKey',$('apiKey').value.trim());
