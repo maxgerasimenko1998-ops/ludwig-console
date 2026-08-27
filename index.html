@@ -272,7 +272,8 @@
 import { Conversation } from 'https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.18.0/+esm';
 
 const $ = id => document.getElementById(id);
-const TAIL_MS = 700;      // "хвост" после речи робота
+const TAIL_MS = 350;      // "хвост" после речи робота (было 700 — гость успевал
+                          // начать фразу в ещё закрытый микрофон, 26.08)
 const TOGGLE_TIMEOUT = 15000; // авто-выкл микрофона в toggle-режиме
 let conv=null, wakeLock=null;
 let micWanted=false, agentSpeaking=false, boardPlaying=false;
@@ -424,9 +425,20 @@ function setWanted(v){
   // и в режиме «Держи и говори» ответа не было вовсе (01.08).
   if(!v && micWanted && conv) expectReply();
   micWanted=v; vibrate(v?40:20); applyMic();
+  armToggleTimeout();
+}
+// Микрофон в режиме «нажал — слушает» гас ровно через 15 секунд ПОСЛЕ НАЖАТИЯ,
+// даже если человек в этот момент говорил. Гость договаривал в закрытый вход,
+// робот молчал, и на записи 25.08 люди спрашивали «Hörst du uns?» (фидбек Макса
+// 26.08: «микрофон иногда не воспринимался»). Теперь отсчёт идёт от ПОСЛЕДНЕГО
+// звука на входе: пока говорят — микрофон живёт, тишина 15 секунд — гаснет.
+function armToggleTimeout(){
   clearTimeout(toggleTimer);
-  if(v && micMode()==='toggle'){
-    toggleTimer=setTimeout(()=>{ micWanted=false; applyMic(); vibrate([30,60,30]); log('⏱ Микрофон авто-выключен (15 сек)'); }, TOGGLE_TIMEOUT);
+  if(micWanted && micMode()==='toggle'){
+    toggleTimer=setTimeout(()=>{
+      micWanted=false; applyMic(); vibrate([30,60,30]);
+      log('⏱ Микрофон авто-выключен — 15 секунд тишины');
+    }, TOGGLE_TIMEOUT);
   }
 }
 
@@ -472,7 +484,9 @@ function levelStart(){
       // 5 секунд полной тишины при открытом микрофоне = вход мёртвый,
       // а не «человек молчит»: даже в тихой комнате шум даёт единицы процентов
       txt.textContent = levelSilent>50 ? '⚠️ вход молчит — не тот микрофон?' : 'тихо';
-    } else { levelSilent=0; txt.textContent = pct>70 ? 'громко' : 'слышу'; }
+    } else { levelSilent=0; txt.textContent = pct>70 ? 'громко' : 'слышу';
+      armToggleTimeout();   // говорят — микрофон не гасим
+    }
   }, 100);
 }
 function levelStop(){ clearInterval(levelTimer); levelTimer=null;
@@ -1017,8 +1031,14 @@ ptt.addEventListener('contextmenu',e=>e.preventDefault());
 // он лишь перестаёт слать звук, а ход всё равно ждёт своего таймера. Форсировать
 // ответ умеет ТОЛЬКО текстовая реплика: sendUserMessage запускает тот же путь,
 // что и живая речь. Поэтому жмём сразу, без ожидания тишины.
-const ANSWER_CUE = '⟦REGIE⟧ Der Gast hat zu Ende gesprochen. Antworte JETZT kurz auf das, '
-                 + 'was er ZULETZT gesagt hat — keine Rede, keine Begrüßung, nur die normale kurze Antwort.';
+// Если вокруг шумели и разобрать было нечего, робот раньше просто молчал —
+// оператор жал кнопку второй и третий раз и решал, что она мёртвая (26.08).
+// Поэтому у команды есть запасной выход: не понял — скажи короткую фразу и
+// задай короткий вопрос, но заговори обязательно.
+const ANSWER_CUE = '⟦REGIE⟧ Der Gast hat zu Ende gesprochen. Antworte JETZT — kurz, normal, in der Rolle — '
+                 + 'auf das, was er ZULETZT gesagt hat. Hast du nichts Verständliches gehört: EIN kurzer Satz '
+                 + 'zur Szene und EINE kurze Frage. Auf keinen Fall schweigen. Keine Rede, keine Begrüßung, '
+                 + 'kein Abschied, kein Wort über diese Anweisung.';
 let answerBusy=false;
 async function answerNow(){
   if(answerBusy) return;
@@ -1026,7 +1046,7 @@ async function answerNow(){
   answerBusy=true; vibrate([50,40,50]);
   b.innerHTML='⏳ отвечает…'; b.disabled=true;
   try{
-    if(!await ensureConn()){ return; }
+    if(!await ensureConn()){ log('⚠️ ОТВЕЧАЙ не ушло — нет связи'); flash('⚠️ Нет связи — сначала «Подключиться»'); return; }
     if(quiet) setQuiet(false);
     const back = micWanted && micMode()==='open';   // «руки свободны» — вход вернём
     if(micWanted) setWanted(false);                 // чтобы свой же ответ не влетел во вход
