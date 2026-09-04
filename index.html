@@ -1104,9 +1104,11 @@ $('quietBtn').onclick=()=>setQuiet(!quiet);
 // клавиши не слушает. Возвращать только после его прямого «да».
 // Код лежит в backups/2026-08-10-ПЕРЕД-РАЗБОРОМ-ИВЕНТОВ/klaviatura-otlozheno.js
 
-$('sendCtx').onclick=()=>{
+$('sendCtx').onclick=async()=>{
   vibrate(45);
-  const t=$('ctxInput').value.trim(); if(!t||!conv)return;
+  const t=$('ctxInput').value.trim();
+  if(!t){ flash('⚠️ Сначала впиши контекст в поле'); return; }
+  if(!await ensureConn()) return;
   try{
     conv.sendContextualUpdate(t);
     hiddenLog.push(t); if(hiddenLog.length>HIDDEN_MAX) hiddenLog.shift();
@@ -1117,8 +1119,10 @@ $('sendCtx').onclick=()=>{
 // пульт рабочий, новых функций перед эфиром не добавляем). Комментарий зрителя
 // набирается прямо сюда как «Marius schreibt: <текст>» — можно по-русски,
 // робот ответит по-немецки и обратится к автору по имени (§7.10 промпта).
-$('sayBtn').onclick=()=>{
-  const t=$('sayInput').value.trim(); if(!t||!conv)return;
+$('sayBtn').onclick=async()=>{
+  const t=$('sayInput').value.trim();
+  if(!t){ flash('⚠️ Сначала впиши реплику в поле'); return; }
+  if(!await ensureConn()) return;
   try{ expectReply(); conv.sendUserMessage(t); log('🗣 Реплика гостя: '+t); $('sayInput').value=''; }
   catch(e){ log('⚠️ Реплика не ушла: '+(e?.message||e)); }
 };
