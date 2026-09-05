@@ -269,6 +269,16 @@
   </div>
 
 <script type="module">
+// ПАМЯТЬ БРАУЗЕРА — ТОЛЬКО СВОЯ. Все пульты живут на одном домене
+// maxgerasimenko1998-ops.github.io, а localStorage общий на домен, а не на папку.
+// Поэтому пульты воровали друг у друга мозг и контекст дня: 29.08 и 05.09 пульт
+// съёмки подхватывал ID УЛИЧНОГО мозга, записанный уличным пультом, и весь
+// день говорил не тем Людвигом. Теперь каждый ключ с префиксом этого пульта.
+// Ключ ElevenLabs один на аккаунт — он намеренно общий.
+const NS='ulica:';
+const LS={ get:k=>localStorage.getItem(k==='xiKey'?k:NS+k),
+            set:(k,v)=>localStorage.setItem(k==='xiKey'?k:NS+k,v),
+            del:k=>localStorage.removeItem(k==='xiKey'?k:NS+k) };
 // ВЕРСИЯ ЗАФИКСИРОВАНА НАМЕРЕННО (15.08.2026). Без номера CDN отдаёт самую
 // свежую сборку — а 1.18.0 вышла 14 августа, за три дня до эфира, и никем ещё
 // не обкатана. У самой ElevenLabs уже был случай, когда обновление вложенной
@@ -300,7 +310,7 @@ function vibrate(ms){ try{ navigator.vibrate?.(ms); }catch{} }
 // Хранилище переполняется от накопленных аудиоклипов. Без обёртки первая же
 // запись роняла бы весь обработчик «Подключиться» — и кнопка молча ничего не делала.
 function store(k,v){
-  try{ localStorage.setItem(k,v); return true; }
+  try{ LS.set(k,v); return true; }
   catch(e){ try{ log('⚠️ Память браузера переполнена — удали лишние точные фразы (долгое нажатие на кнопку клипа)'); }catch{}
             return false; }
 }
@@ -323,7 +333,7 @@ const DEFAULT_PERSONAS = {
 - Gib ehrlich zu, dass du eine KI bist, wenn gefragt.`,
     first:'', lang:'', voice:'' },
 };
-function loadPersonas(){ try{ return {...DEFAULT_PERSONAS, ...JSON.parse(localStorage.getItem('personas')||'{}')}; }catch{ return {...DEFAULT_PERSONAS}; } }
+function loadPersonas(){ try{ return {...DEFAULT_PERSONAS, ...JSON.parse(LS.get('personas')||'{}')}; }catch{ return {...DEFAULT_PERSONAS}; } }
 function saveUserPersonas(p){ const u={}; for(const k in p) if(!(k in DEFAULT_PERSONAS)) u[k]=p[k]; store('personas', JSON.stringify(u)); }
 let personas = loadPersonas();
 function refreshPersonaList(sel){
@@ -359,7 +369,7 @@ const QUICK=[
 QUICK.forEach(([label,text])=>{ const b=document.createElement('button'); b.textContent=label; b.onclick=()=>{ $('ctxInput').value=text; }; $('quickCtx').appendChild(b); });
 
 // ---- саундборд: точные фразы (локальные аудиоклипы) ----
-let clips=[]; try{ clips=JSON.parse(localStorage.getItem('clips')||'[]'); }catch{}
+let clips=[]; try{ clips=JSON.parse(LS.get('clips')||'[]'); }catch{}
 const boardAudio=new Audio();
 function renderBoard(){
   const b=$('board'); b.innerHTML='';
@@ -520,8 +530,8 @@ async function refreshMicList(){
   const ins=all.filter(d=>d.kind==='audioinput');
   const outs=all.filter(d=>d.kind==='audiooutput');
 
-  const sel=$('micDevice'), keep=localStorage.getItem('micDeviceId')||'';
-  const keepLabel=localStorage.getItem('micDeviceLabel')||'';
+  const sel=$('micDevice'), keep=LS.get('micDeviceId')||'';
+  const keepLabel=LS.get('micDeviceLabel')||'';
   sel.innerHTML='<option value="">по умолчанию (что выберет телефон)</option>';
   ins.forEach((d,i)=>{
     const o=document.createElement('option');
@@ -546,7 +556,7 @@ async function refreshMicList(){
   const canPickOutput = outs.length>0 && ('setSinkId' in HTMLMediaElement.prototype || IS_ANDROID);
   $('outRow').classList.toggle('hidden', !canPickOutput);
   if(canPickOutput){
-    const os=$('outDevice'), okeep=localStorage.getItem('outDeviceId')||'';
+    const os=$('outDevice'), okeep=LS.get('outDeviceId')||'';
     os.innerHTML='<option value="">по умолчанию (что выберет телефон)</option>';
     outs.forEach((d,i)=>{
       const o=document.createElement('option');
@@ -587,7 +597,7 @@ $('micDevice').onchange=async()=>{
 };
 // ---- способ связи ----
 const connMode = () => $('connMode').value;
-$('connMode').value = localStorage.getItem('connMode') || 'webrtc';
+$('connMode').value = LS.get('connMode') || 'webrtc';
 $('connMode').onchange = ()=>{
   store('connMode', connMode());
   log(connMode()==='websocket'
@@ -638,7 +648,7 @@ $('micRetry').onclick=()=>reacquireMic('вручную');
 // ---- режим микрофона ----
 const micMode = () => $('micMode').value;
 // осталось два режима; сохранённый «toggle» со старых версий превращаем в hold
-$('micMode').value = (localStorage.getItem('micMode')==='open') ? 'open' : 'toggle';
+$('micMode').value = (LS.get('micMode')==='open') ? 'open' : 'toggle';
 $('micMode').onchange=()=>{
   // Сессию НЕ трогаем: переключение режима на живом разговоре роняло связь
   // (01.08). Просто меняем состояние микрофона.
@@ -773,10 +783,10 @@ document.addEventListener('visibilitychange',()=>{
 const SVOJ_AGENT='agent_2501m0q1f81wff6sr8wfxmcee6zd';   // Ludwig — УЛИЦА
 try{
   const qa=new URLSearchParams(location.search).get('agent');
-  if(qa && /^agent_[a-z0-9]+$/i.test(qa)){ localStorage.setItem('ludwigAgentId',qa); history.replaceState(null,'',location.pathname); }
+  if(qa && /^agent_[a-z0-9]+$/i.test(qa)){ LS.set('ludwigAgentId',qa); history.replaceState(null,'',location.pathname); }
 }catch{}
-$('agentId').value=localStorage.getItem('ludwigAgentId')||SVOJ_AGENT;
-$('dayCtx').value=localStorage.getItem('dayCtx')||'';
+$('agentId').value=LS.get('ludwigAgentId')||SVOJ_AGENT;
+$('dayCtx').value=LS.get('dayCtx')||'';
 function log(l){ const e=$('log'); e.textContent+=l+'\n'; e.scrollTop=e.scrollHeight; }
 // НИКАКИХ alert(): Chrome предлагает «Dialogfelder unterdrücken», после чего
 // все окна молча исчезают навсегда — и пульт «просто не работает» (31.07).
@@ -1130,7 +1140,7 @@ $('sayBtn').onclick=async()=>{
 // ---- НАДИКТОВКА ГОЛОСОМ ----
 // Оператор не печатает — зажимает кнопку и говорит на любом языке.
 // Запись → расшифровка через ElevenLabs Scribe → сразу уходит роботу как задание.
-$('apiKey').value=localStorage.getItem('xiKey')||'';
+$('apiKey').value=LS.get('xiKey')||'';
 let rec=null, recChunks=[], recStream=null;
 
 // Нажал — говоришь — нажал ещё раз. Зажимать ничего не надо:
@@ -1344,7 +1354,7 @@ const DEJSTVIYA = [
   ['bye',    '👋 Завершить диалог',                 ()=>$('qaBye')?.click()],
 ];
 let klavishi = {};
-try{ klavishi = JSON.parse(localStorage.getItem('klavishi')||'{}'); }catch{}
+try{ klavishi = JSON.parse(LS.get('klavishi')||'{}'); }catch{}
 let uchim = null;          // какое действие сейчас ждёт нажатия
 const poslednie = [];      // последние нажатия — для проверки устройства
 
