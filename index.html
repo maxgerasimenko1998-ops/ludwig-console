@@ -76,6 +76,10 @@
   details summary { font-size:13px; color:var(--dim); cursor:pointer; padding:4px 0; }
   .hint { font-size:11px; color:var(--dim); line-height:1.4; }
   .banner { text-align:center; font-size:13px; padding:8px; border-radius:10px; background:#3a2f12; color:var(--gold); }
+  /* ОТКЛИК КНОПКИ: на айфоне вибрации у веб-страниц нет, и Макс не понимал,
+     нажалось или нет (08.09). Теперь кнопка на полторы секунды зеленеет и пишет, что ушло. */
+  button.otklik{ background:#1e8449 !important; box-shadow:inset 0 0 0 3px #7be495; transform:scale(.97); transition:transform .08s }
+  button.otklik-net{ background:#8e2020 !important; box-shadow:inset 0 0 0 3px #f08080; }
 </style>
 </head>
 <body>
@@ -127,6 +131,7 @@
   </div>
 
   <!-- ЭКРАН РАБОТЫ -->
+  <label style="position:fixed;left:-9999px;top:0" aria-hidden="true"><input type="checkbox" switch id="haptSw"></label>
   <div id="live" class="hidden" style="display:none;flex-direction:column;gap:12px">
     <button id="ptt">🎤 ГОВОРИТЬ<br><small>микрофон выключен</small></button>
     <button id="answerNow" class="hidden" style="display:none"></button>
@@ -305,7 +310,14 @@ let hiddenLog=[];         // отправленные скрытые конте�
 const HIDDEN_MAX=12;      // за 3 часа их накопились бы десятки и каждый реконнект гнал бы всё заново
 let pendingRegie=false;   // была ли команда режиссёра до обрыва
 
-function vibrate(ms){ try{ navigator.vibrate?.(ms); }catch{} }
+function vibrate(ms){ try{ navigator.vibrate?.(ms); }catch{} try{ $('haptSw')?.click(); }catch{} }
+// Видимый отклик кнопки: зелёная + надпись на 1.4 с, потом как было. ok=false — красная.
+function otklik(b, tekst, ok=true){
+  if(!b) return;
+  const was=b.innerHTML, cls=ok?'otklik':'otklik-net';
+  b.classList.add(cls); b.innerHTML=(ok?'✅ ':'⚠️ ')+tekst;
+  clearTimeout(b._otk); b._otk=setTimeout(()=>{ b.classList.remove(cls); b.innerHTML=was; }, 1400);
+}
 
 // Хранилище переполняется от накопленных аудиоклипов. Без обёртки первая же
 // запись роняла бы весь обработчик «Подключиться» — и кнопка молча ничего не делала.
@@ -366,7 +378,7 @@ const QUICK=[
   ['🏁 Заверши диалог','Beende dieses Gespräch jetzt: verabschiede dich warm und königlich — dein Volk ruft, du musst weiter. Erwähne robotollern.'],
   ['🗣 Дословно','Sage den folgenden Satz WÖRTLICH und unverändert, Wort für Wort, ohne ihn umzuformulieren: "___" — (впиши точную фразу вместо ___; можно добавить обстоятельства и тон)'],
 ];
-QUICK.forEach(([label,text])=>{ const b=document.createElement('button'); b.textContent=label; b.onclick=()=>{ $('ctxInput').value=text; }; $('quickCtx').appendChild(b); });
+QUICK.forEach(([label,text])=>{ const b=document.createElement('button'); b.textContent=label; b.onclick=()=>{ $('ctxInput').value=text; vibrate(30); otklik(b,'в поле'); }; $('quickCtx').appendChild(b); });
 
 // ---- саундборд: точные фразы (локальные аудиоклипы) ----
 let clips=[]; try{ clips=JSON.parse(LS.get('clips')||'[]'); }catch{}
@@ -1079,6 +1091,7 @@ async function answerNow(){
     if(back){ await new Promise(r=>setTimeout(r,600)); setWanted(true); }
   } finally {
     b.innerHTML=was; b.disabled=false; answerBusy=false;
+    otklik(b, conv?'ушло':'нет связи', !!conv);
   }
 }
 $('answerNow').onclick=answerNow;
@@ -1122,7 +1135,7 @@ $('sendCtx').onclick=async()=>{
   try{
     conv.sendContextualUpdate(t);
     hiddenLog.push(t); if(hiddenLog.length>HIDDEN_MAX) hiddenLog.shift();
-    log('📩 Контекст: '+t); $('ctxInput').value='';
+    log('📩 Контекст: '+t); $('ctxInput').value=''; otklik($('sendCtx'),'контекст ушёл');
   }catch(e){ log('⚠️ Контекст не ушёл: '+(e?.message||e)); }
 };
 // Для прямого эфира отдельной кнопки НЕТ и не нужно (решение Макса 15.08:
@@ -1133,7 +1146,7 @@ $('sayBtn').onclick=async()=>{
   const t=$('sayInput').value.trim();
   if(!t){ flash('⚠️ Сначала впиши реплику в поле'); return; }
   if(!await ensureConn()) return;
-  try{ expectReply(); conv.sendUserMessage(t); log('🗣 Реплика гостя: '+t); $('sayInput').value=''; }
+  try{ expectReply(); conv.sendUserMessage(t); log('🗣 Реплика гостя: '+t); $('sayInput').value=''; otklik($('sayBtn'),'ушло'); }
   catch(e){ log('⚠️ Реплика не ушла: '+(e?.message||e)); }
 };
 
@@ -1245,7 +1258,7 @@ $('dirBtn').onclick=async()=>{
   const t=$('dirInput').value.trim(); if(!t) return;
   vibrate([35,25,35]);
   if(!await ensureConn()) return;
-  sendRegie(t); hadMonologue=true; refreshDirButtons();
+  sendRegie(t); hadMonologue=true; refreshDirButtons(); otklik($('dirBtn'),'задание ушло');
 };
 // «Начало диалога»: то же задание, но робот НЕ читает речь на минуту,
 // а открывает сцену парой фраз и ждёт ответа — дальше обычный разговор.
@@ -1276,13 +1289,14 @@ for(const id in INSTANT){
     if(instantBusy) return;
     // Раньше кнопка молча ждала подключения и «не нажималась» — Макс давил
     // по пять раз (01.08). Теперь палец получает отклик мгновенно.
-    instantBusy=true; vibrate([35,25,35]);
+    instantBusy=true; vibrate([35,25,35]); let ok=false;
     const b=$(id), was=b.textContent;
     b.textContent='⏳ …'; b.disabled=true;
     try{
-      if(await ensureConn()){ sendRegie(INSTANT[id]); vibrate(60); }
+      if(await ensureConn()){ sendRegie(INSTANT[id]); vibrate(60); ok=true; }
     } finally {
       b.textContent=was; b.disabled=false; instantBusy=false;
+      otklik(b, ok?'ушло':'нет связи', ok);
     }
   };
 }
