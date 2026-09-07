@@ -1081,7 +1081,7 @@ async function answerNow(){
   answerBusy=true; vibrate([50,40,50]);
   b.innerHTML='⏳ отвечает…'; b.disabled=true;
   try{
-    if(!await ensureConn()){ log('⚠️ ОТВЕЧАЙ не ушло — нет связи'); flash('⚠️ Нет связи — сначала «Подключиться»'); return; }
+    if(!await ensureConn()){ log('⚠️ ОТВЕЧАЙ не ушло — нет связи'); otklik($('qaAnswer'),'нет связи',false); flash('⚠️ Нет связи — сначала «Подключиться»'); return; }
     if(quiet) setQuiet(false);
     const back = micWanted && micMode()==='open';   // «руки свободны» — вход вернём
     if(micWanted) setWanted(false);                 // чтобы свой же ответ не влетел во вход
@@ -1091,7 +1091,7 @@ async function answerNow(){
     if(back){ await new Promise(r=>setTimeout(r,600)); setWanted(true); }
   } finally {
     b.innerHTML=was; b.disabled=false; answerBusy=false;
-    otklik(b, conv?'ушло':'нет связи', !!conv);
+    otklik($('qaAnswer')||b, conv?'ушло':'нет связи', !!conv);
   }
 }
 $('answerNow').onclick=answerNow;
