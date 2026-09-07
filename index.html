@@ -314,9 +314,10 @@ function vibrate(ms){ try{ navigator.vibrate?.(ms); }catch{} try{ $('haptSw')?.c
 // Видимый отклик кнопки: зелёная + надпись на 1.4 с, потом как было. ok=false — красная.
 function otklik(b, tekst, ok=true){
   if(!b) return;
-  const was=b.innerHTML, cls=ok?'otklik':'otklik-net';
-  b.classList.add(cls); b.innerHTML=(ok?'✅ ':'⚠️ ')+tekst;
-  clearTimeout(b._otk); b._otk=setTimeout(()=>{ b.classList.remove(cls); b.innerHTML=was; }, 1400);
+  if(b._was==null) b._was=b.innerHTML;            // исходная надпись — один раз, даже если позвали дважды
+  b.classList.remove('otklik','otklik-net'); b.classList.add(ok?'otklik':'otklik-net');
+  b.innerHTML=(ok?'✅ ':'⚠️ ')+tekst;
+  clearTimeout(b._otk); b._otk=setTimeout(()=>{ b.classList.remove('otklik','otklik-net'); b.innerHTML=b._was; b._was=null; }, 1400);
 }
 
 // Хранилище переполняется от накопленных аудиоклипов. Без обёртки первая же
